@@ -13,9 +13,11 @@ const PlayerSchema = new Schema({
 
 const RoomSchema = new Schema({
   roomCode: { type: String, required: true, unique: true, uppercase: true },
-  status: { type: String, default: 'waiting' }, // 'waiting', 'playing', 'finished'
+  gameType: { type: String, default: 'truth_or_dare' },
+  status: { type: String, default: 'waiting' }, // 'waiting', 'playing', 'finished', 'spy_voting', 'spy_result'
   players: [PlayerSchema],
   currentRoundNumber: { type: Number, default: 0 },
+  spyGameState: { type: Object, default: null },
   createdAt: { type: Date, default: Date.now, expires: 86400 } // 24小時後過期
 });
 
@@ -45,9 +47,11 @@ class InMemoryRoom {
   constructor(data) {
     this._id = memoryDb.createId();
     this.roomCode = data.roomCode ? data.roomCode.toUpperCase() : '';
+    this.gameType = data.gameType || 'truth_or_dare';
     this.status = data.status || 'waiting';
     this.players = data.players || [];
     this.currentRoundNumber = data.currentRoundNumber || 0;
+    this.spyGameState = data.spyGameState || null;
     this.createdAt = new Date();
   }
 

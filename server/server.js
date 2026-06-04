@@ -41,6 +41,14 @@ try {
   DARE_CHALLENGES = ["用最浮誇的語氣對著牆壁告白一分鐘。", "模仿一隻喝醉的猩猩，維持 30 秒。"];
 }
 
+let SPY_WORDS = [];
+try {
+  SPY_WORDS = JSON.parse(fs.readFileSync(path.join(__dirname, 'spyWords.json'), 'utf-8'));
+  console.log(`✅ 成功載入臥底題庫: ${SPY_WORDS.length} 組`);
+} catch (error) {
+  SPY_WORDS = [["麥克風", "擴音器"], ["蘋果", "水蜜桃"]];
+}
+
 const roomState = new Map(); // 用來記錄每個房間出過的題目與上次抽到的人
 
 // 隨機獲取不重複的題目
@@ -84,7 +92,7 @@ io.on('connection', (socket) => {
   // ==========================================
   // 1. 創建房間 (createRoom)
   // ==========================================
-  socket.on('createRoom', async ({ nickname }) => {
+  socket.on('createRoom', async ({ nickname, gameType }) => {
     try {
       let roomCode = generateRoomCode();
       // 確保 roomCode 唯一
@@ -107,6 +115,7 @@ io.on('connection', (socket) => {
 
       const room = createRoomInstance({
         roomCode,
+        gameType: gameType || 'truth_or_dare',
         status: 'waiting',
         players: [hostPlayer],
         currentRoundNumber: 0
@@ -426,7 +435,145 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // 8. 用戶斷線處理
+  // 8. 誰是臥底 (Spy) 專屬邏輯
+  // ==========================================
+  socket.on('startSpyGame', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.gameType !== 'spy') return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return;
+      if (room.players.length < 3) return socket.emit('error', { message: '人數不足，誰是臥底至少需要 3 人！' });
+
+      const wordPair = SPY_WORDS[Math.floor(Math.random() * SPY_WORDS.length)];
+      const commonWord = wordPair[0];
+      const spyWord = wordPair[1];
+
+      const spyIndex = Math.floor(Math.random() * room.players.length);
+      const spyId = room.players[spyIndex]._id;
+
+      room.spyGameState = {
+        spyId,
+        commonWord,
+        spyWord,
+        alivePlayers: room.players.map(p => p._id),
+        votes: {}
+      };
+      
+      room.players.forEach(p => p.status = 'playing_spy');
+      room.status = 'playing';
+      await room.save();
+
+      room.players.forEach(p => {
+        const role = p._id === spyId ? 'spy' : 'commoner';
+        const word = role === 'spy' ? spyWord : commonWord;
+        io.to(p.socketId).emit('spyGameStarted', { role, word });
+      });
+
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('startSpyVoting', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.gameType !== 'spy') return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return;
+
+      room.status = 'spy_voting';
+      room.spyGameState.votes = {};
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('submitSpyVote', async ({ roomCode, votedPlayerId }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.status !== 'spy_voting') return;
+      const player = room.players.find(p => p.socketId === socket.id);
+      if (!player || !room.spyGameState.alivePlayers.includes(player._id)) return;
+
+      room.spyGameState.votes[player._id] = votedPlayerId;
+      await room.save();
+      
+      io.to(roomCode).emit('roomUpdated', room);
+
+      const aliveCount = room.spyGameState.alivePlayers.length;
+      const votesCount = Object.keys(room.spyGameState.votes).length;
+
+      if (votesCount === aliveCount) {
+        const voteCounts = {};
+        for (const voter in room.spyGameState.votes) {
+          const voted = room.spyGameState.votes[voter];
+          voteCounts[voted] = (voteCounts[voted] || 0) + 1;
+        }
+        
+        let maxVotes = 0;
+        let eliminatedId = null;
+        let tie = false;
+
+        for (const [vid, count] of Object.entries(voteCounts)) {
+          if (count > maxVotes) {
+            maxVotes = count;
+            eliminatedId = vid;
+            tie = false;
+          } else if (count === maxVotes) {
+            tie = true;
+          }
+        }
+
+        let winner = null;
+        let isSpyEliminated = false;
+
+        if (!tie) {
+          if (eliminatedId === room.spyGameState.spyId) {
+            isSpyEliminated = true;
+            winner = 'commoner';
+          } else {
+            winner = 'spy';
+          }
+        }
+
+        room.status = 'spy_result';
+        room.spyGameState.eliminatedId = eliminatedId;
+        room.spyGameState.isSpyEliminated = isSpyEliminated;
+        room.spyGameState.winner = winner;
+        room.spyGameState.tie = tie;
+
+        await room.save();
+        io.to(roomCode).emit('spyVotingResult', room);
+        io.to(roomCode).emit('roomUpdated', room);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('restartSpyGame', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.gameType !== 'spy') return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return;
+
+      room.status = 'waiting';
+      room.spyGameState = null;
+      room.players.forEach(p => p.status = 'idle');
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  // ==========================================
+  // 9. 用戶斷線處理
   // ==========================================
   socket.on('disconnect', async () => {
     try {

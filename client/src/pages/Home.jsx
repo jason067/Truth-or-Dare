@@ -19,7 +19,7 @@ export default function Home() {
       description: '隱藏在人群中，你能找出那個與眾不同的人嗎？',
       icon: '🕵️',
       color: 'from-gray-700 to-gray-900',
-      active: false
+      active: true
     },
     {
       id: 'turtle-soup',
