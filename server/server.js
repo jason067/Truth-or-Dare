@@ -181,7 +181,7 @@ io.on('connection', (socket) => {
   // ==========================================
   // 3. 開始轉輪盤 (spinWheel)
   // ==========================================
-  socket.on('spinWheel', async ({ roomCode }) => {
+  socket.on('spinWheel', async ({ roomCode, targetId }) => {
     try {
       const room = await Room.findOne({ roomCode });
       if (!room) return socket.emit('error', { message: '找不到房間' });
@@ -207,15 +207,20 @@ io.on('connection', (socket) => {
       }
       const state = roomState.get(roomCode);
 
-      // 隨機挑選玩家：如果房間人數 > 1，排除上一局剛被抽到的人，避免連續當選
-      let availablePlayers = room.players;
-      if (room.players.length > 1 && state.lastSelectedId) {
-        const others = room.players.filter(p => p._id !== state.lastSelectedId);
-        if (others.length > 0) availablePlayers = others;
+      let selected;
+      if (targetId) {
+        selected = room.players.find(p => p._id === targetId);
+        if (!selected) return socket.emit('error', { message: '指定的玩家不存在！' });
+      } else {
+        let availablePlayers = room.players;
+        if (room.players.length > 1 && state.lastSelectedId) {
+          const others = room.players.filter(p => p._id !== state.lastSelectedId);
+          if (others.length > 0) availablePlayers = others;
+        }
+        
+        const randomIndex = Math.floor(Math.random() * availablePlayers.length);
+        selected = availablePlayers[randomIndex];
       }
-      
-      const randomIndex = Math.floor(Math.random() * availablePlayers.length);
-      const selected = availablePlayers[randomIndex];
       
       // 更新最後抽中紀錄
       state.lastSelectedId = selected._id;

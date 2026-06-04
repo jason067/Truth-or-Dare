@@ -25,6 +25,7 @@ export default function TruthOrDare() {
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [spinningName, setSpinningName] = useState('');
+  const [showDesignateModal, setShowDesignateModal] = useState(false);
 
   useEffect(() => {
     socket = io(BACKEND_URL);
@@ -127,9 +128,9 @@ export default function TruthOrDare() {
     });
   };
 
-  const handleSpinWheel = () => {
+  const handleSpinWheel = (targetId = null) => {
     if (isSpinning) return;
-    socket.emit('spinWheel', { roomCode: myRoomCode });
+    socket.emit('spinWheel', { roomCode: myRoomCode, targetId });
   };
 
   const handleSelectChoice = (choice) => {
@@ -350,13 +351,22 @@ export default function TruthOrDare() {
               {isHost ? (
                 <div className="flex flex-col gap-4">
                   <h3 className="text-2xl font-black text-white drop-shadow-md">你是房主，準備好抽人了嗎？</h3>
-                  <p className="text-gray-400 font-medium">點選下方按鈕，隨機挑選一位玩家進行挑戰！</p>
-                  <button 
-                    className="mt-4 px-10 py-5 rounded-full bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white font-black text-xl hover:scale-105 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] transition-all uppercase tracking-wider"
-                    onClick={handleSpinWheel}
-                  >
-                    🎯 啟動輪盤抽人 🎯
-                  </button>
+                  <p className="text-gray-400 font-medium">請選擇要隨機抽取，還是直接指定挑戰者！</p>
+                  
+                  <div className="mt-2 flex flex-col gap-3 w-full">
+                    <button 
+                      className="px-8 py-4 rounded-full bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white font-black text-xl hover:scale-105 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] transition-all uppercase tracking-wider w-full"
+                      onClick={() => handleSpinWheel(null)}
+                    >
+                      🎲 隨機抽取玩家
+                    </button>
+                    <button 
+                      className="px-8 py-3 rounded-full bg-white/10 border border-white/20 text-gray-200 font-bold text-lg hover:bg-white/20 transition-all w-full flex items-center justify-center gap-2"
+                      onClick={() => setShowDesignateModal(true)}
+                    >
+                      🎯 房主指定玩家
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4 bg-white/5 p-8 rounded-3xl border border-white/10 shadow-xl">
@@ -411,6 +421,36 @@ export default function TruthOrDare() {
               <p className="text-2xl text-red-400 font-bold animate-pulse">抗議中... 等待房主開恩...</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 5. 房主指定玩家 Modal */}
+      {showDesignateModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-gray-900 border border-white/20 p-6 rounded-3xl w-full max-w-md shadow-2xl relative">
+            <button 
+              onClick={() => setShowDesignateModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl font-bold"
+            >
+              ✕
+            </button>
+            <h3 className="text-2xl font-black text-white mb-6 text-center tracking-widest">選擇指定玩家</h3>
+            <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
+              {room?.players.filter(p => !['offline', 'kicked', 'appealing'].includes(p.status)).map(p => (
+                <button
+                  key={p._id}
+                  onClick={() => {
+                    setShowDesignateModal(false);
+                    handleSpinWheel(p._id);
+                  }}
+                  className="p-4 bg-white/5 hover:bg-purple-500/30 border border-white/10 hover:border-purple-500/50 rounded-xl text-left font-bold text-white transition-all flex justify-between items-center"
+                >
+                  <span className="text-lg">{p.nickname} {p._id === myId ? <span className="text-sm text-gray-400 ml-2">(自己)</span> : ''}</span>
+                  <span className="text-xl">👉</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
