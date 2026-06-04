@@ -99,6 +99,11 @@ export default function App() {
       alert(message);
     });
 
+    socket.on('kickedOut', () => {
+      alert("你已被房主無情地永久踢出！");
+      window.location.reload();
+    });
+
     return () => {
       socket.disconnect();
     };
@@ -139,6 +144,20 @@ export default function App() {
 
   const handleLeaveRoom = () => {
     window.location.reload();
+  };
+
+  const handleKickPlayer = (targetId) => {
+    if(window.confirm("確定要踢出這名玩家嗎？")) {
+      socket.emit('kickPlayer', { roomCode: myRoomCode, targetId });
+    }
+  };
+
+  const handleAppealKick = () => {
+    socket.emit('appealKick', { roomCode: myRoomCode });
+  };
+
+  const handleResolveAppeal = (targetId, accept) => {
+    socket.emit('resolveAppeal', { roomCode: myRoomCode, targetId, accept });
   };
 
   const getMyPoints = () => {
@@ -264,9 +283,25 @@ export default function App() {
                       isOffline ? 'bg-red-500' : 'bg-emerald-500'
                     }`}></span>
                   </div>
-                  <div className="flex justify-between text-xs font-semibold text-gray-400">
-                    <span>✨ 得分: {p.score}</span>
-                    <span className="text-yellow-500">🪙 {p.points}</span>
+                  <div className="flex justify-between items-end">
+                    <div className="flex flex-col gap-1 text-xs font-semibold text-gray-400">
+                      <span>✨ 得分: {p.score}</span>
+                      <span className="text-yellow-500">🪙 {p.points}</span>
+                    </div>
+                    {isHost && !isMe && (
+                      <div className="flex gap-2">
+                        {p.status === 'appealing' ? (
+                          <>
+                            <button onClick={() => handleResolveAppeal(p._id, true)} className="px-2 py-1 bg-green-500/20 text-green-400 rounded border border-green-500/50 hover:bg-green-500 hover:text-white transition-colors text-xs font-bold shadow-[0_0_10px_rgba(34,197,94,0.3)]">准許</button>
+                            <button onClick={() => handleResolveAppeal(p._id, false)} className="px-2 py-1 bg-red-500/20 text-red-400 rounded border border-red-500/50 hover:bg-red-500 hover:text-white transition-colors text-xs font-bold shadow-[0_0_10px_rgba(239,68,68,0.3)]">踢除</button>
+                          </>
+                        ) : p.status === 'kicked' ? (
+                          <span className="text-red-400 text-xs px-2 py-1 font-bold">已踢出</span>
+                        ) : (
+                          <button onClick={() => handleKickPlayer(p._id)} className="px-2 py-1 bg-white/10 text-gray-300 rounded hover:bg-red-500 hover:text-white transition-colors text-xs">🥾 踢出</button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -342,6 +377,34 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* 4. 被踢出遮罩 */}
+      {(room?.players.find(p => p._id === myId)?.status === 'kicked' || room?.players.find(p => p._id === myId)?.status === 'appealing') && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+          <div className="text-8xl mb-6">🥾</div>
+          <h2 className="text-4xl md:text-5xl font-black text-red-500 mb-4 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]">
+            你已被房主踢出房間！
+          </h2>
+          {room?.players.find(p => p._id === myId)?.status === 'kicked' && (
+            <>
+              <p className="text-xl text-gray-300 mb-8">覺得不公平嗎？向房主提出抗議！</p>
+              <button 
+                onClick={handleAppealKick}
+                className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white text-xl font-bold rounded-2xl shadow-[0_0_20px_rgba(239,68,68,0.5)] transition-all hover:scale-105"
+              >
+                🤬 我不服！(提出抗議)
+              </button>
+            </>
+          )}
+          {room?.players.find(p => p._id === myId)?.status === 'appealing' && (
+            <div className="flex flex-col items-center mt-4">
+              <div className="w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+              <p className="text-2xl text-red-400 font-bold animate-pulse">抗議中... 等待房主開恩...</p>
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }

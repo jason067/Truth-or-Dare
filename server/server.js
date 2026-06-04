@@ -362,7 +362,71 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // 7. 用戶斷線處理
+  // 7. 踢人與抗議機制 (Kick & Appeal)
+  // ==========================================
+  
+  socket.on('kickPlayer', async ({ roomCode, targetId }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room) return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return socket.emit('error', { message: '只有房主可以踢人' });
+
+      const target = room.players.find(p => p._id === targetId);
+      if (!target || target.isHost) return socket.emit('error', { message: '無法踢出此玩家' });
+
+      target.status = 'kicked';
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('appealKick', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room) return;
+      const player = room.players.find(p => p.socketId === socket.id);
+      if (!player || player.status !== 'kicked') return;
+
+      player.status = 'appealing';
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('resolveAppeal', async ({ roomCode, targetId, accept }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room) return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return;
+
+      const targetIndex = room.players.findIndex(p => p._id === targetId);
+      if (targetIndex === -1) return;
+      const target = room.players[targetIndex];
+
+      if (accept) {
+        target.status = 'idle';
+        await room.save();
+        io.to(roomCode).emit('roomUpdated', room);
+      } else {
+        const targetSocketId = target.socketId;
+        room.players.splice(targetIndex, 1);
+        await room.save();
+        io.to(roomCode).emit('roomUpdated', room);
+        io.to(targetSocketId).emit('kickedOut');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  // ==========================================
+  // 8. 用戶斷線處理
   // ==========================================
   socket.on('disconnect', async () => {
     try {
