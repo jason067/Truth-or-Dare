@@ -1,0 +1,12 @@
+{
+  "name": "truth-or-dare-multiplayer",
+  "version": "1.0.0",
+  "description": "Multiplayer Truth or Dare Game using Express, Socket.io, and React",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently \"npm run dev --prefix client\" \"npm start --prefix server\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
