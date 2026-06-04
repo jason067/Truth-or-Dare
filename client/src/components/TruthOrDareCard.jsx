@@ -14,23 +14,23 @@ export default function TruthOrDareCard({
   onSkip
 }) {
   return (
-    <div className="w-full max-w-[440px] mx-auto p-6 rounded-3xl glass-panel relative z-10 text-white">
+    <div className="w-full max-w-[440px] mx-auto p-4 md:p-6 rounded-3xl glass-panel relative z-10 text-white">
       {/* 頂部玩家狀態區 */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="text-lg font-bold tracking-wide">
+      <div className="flex justify-between items-center mb-4 md:mb-6">
+        <div className="text-base md:text-lg font-bold tracking-wide">
           {isMyTurn ? (
             <span className="text-truth-cyan glow-text">🎯 輪到你了！</span>
           ) : (
             <span>正在看 <strong className="text-dare-pink">{selectedPlayerName}</strong> 挑戰...</span>
           )}
         </div>
-        <div className="bg-white/10 px-4 py-2 rounded-full text-sm font-semibold border border-white/20 flex items-center gap-2">
+        <div className="bg-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-semibold border border-white/20 flex items-center gap-1 md:gap-2">
           🪙 <span className="text-yellow-400 drop-shadow-md">{points} 點</span>
         </div>
       </div>
 
       {/* 3D 翻轉卡片主體 */}
-      <div className="w-full h-[420px] perspective-[1500px]">
+      <div className="w-full h-[360px] md:h-[420px] perspective-[1500px]">
         <div className={`relative w-full h-full transition-transform duration-1000 preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
           
           {/* ===================== 卡片正面 (選擇階段) ===================== */}

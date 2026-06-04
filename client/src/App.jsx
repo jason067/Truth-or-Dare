@@ -155,11 +155,11 @@ export default function App() {
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-600/20 rounded-full blur-[100px] pointer-events-none"></div>
 
-        <div className="text-center mb-12 z-10">
-          <h1 className="text-6xl md:text-7xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 drop-shadow-2xl mb-4 glow-text uppercase">
-            Truth <span className="text-white">or</span> Dare
+        <div className="text-center mb-12 z-10 w-full px-2">
+          <h1 className="text-5xl md:text-7xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 drop-shadow-2xl mb-4 glow-text uppercase">
+            Truth <span className="text-white text-4xl md:text-6xl">or</span> Dare
           </h1>
-          <p className="text-xl text-purple-200 font-medium tracking-wide">
+          <p className="text-lg md:text-xl text-purple-200 font-medium tracking-wide">
             🎮 終極多人派對連線版 ⚡
           </p>
         </div>
@@ -212,24 +212,26 @@ export default function App() {
   return (
     <div className="flex flex-col min-h-screen p-4 md:p-8">
       {/* 頂部列 */}
-      <header className="flex justify-between items-center px-6 py-4 glass-panel rounded-2xl mb-6 shadow-lg">
-        <div className="flex items-center gap-6">
-          <h2 className="text-xl font-bold text-gray-200">
-            房間號碼：<span className="text-cyan-400 tracking-widest font-black ml-2 glow-text">{myRoomCode}</span>
+      <header className="flex justify-between items-center px-4 md:px-6 py-3 md:py-4 glass-panel rounded-2xl mb-4 md:mb-6 shadow-lg">
+        <div className="flex items-center gap-3 md:gap-6">
+          <h2 className="text-base md:text-xl font-bold text-gray-200 flex items-center">
+            <span className="hidden sm:inline">房間號碼：</span>
+            <span className="sm:hidden text-gray-400">房號:</span>
+            <span className="text-cyan-400 tracking-widest font-black ml-1 md:ml-2 glow-text">{myRoomCode}</span>
           </h2>
-          <span className="bg-white/10 px-4 py-1.5 rounded-full text-sm font-semibold border border-white/10 text-indigo-200">
+          <span className="bg-white/10 px-3 py-1 md:px-4 md:py-1.5 rounded-full text-xs md:text-sm font-semibold border border-white/10 text-indigo-200 whitespace-nowrap">
             👥 {room?.players.length} 人
           </span>
         </div>
         <button 
-          className="px-5 py-2 bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white rounded-xl font-bold transition-colors"
+          className="px-4 py-2 md:px-5 bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white rounded-xl font-bold transition-colors text-sm md:text-base"
           onClick={handleLeaveRoom}
         >
           🚪 離開
         </button>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-6 flex-grow">
+      <div className="flex flex-col-reverse lg:flex-row gap-6 flex-grow">
         
         {/* 左側：玩家清單面板 */}
         <aside className="w-full lg:w-80 glass-panel rounded-3xl p-6 flex flex-col gap-4 shadow-xl border border-white/5 h-fit lg:sticky lg:top-8">
