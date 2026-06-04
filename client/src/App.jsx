@@ -164,8 +164,8 @@ export default function App() {
           </p>
         </div>
 
-        <div className="w-full max-w-md glass-panel p-8 rounded-[2rem] z-10 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-          <form className="flex flex-col gap-6">
+        <div className="w-full max-w-md glass-panel p-5 md:p-8 rounded-[2rem] z-10 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+          <form className="flex flex-col gap-4 md:gap-6">
             <div className="flex flex-col gap-2">
               <label className="text-sm font-bold text-indigo-300 uppercase tracking-widest pl-2">您的派對暱稱</label>
               <input 
@@ -174,31 +174,31 @@ export default function App() {
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 maxLength={10}
-                className="w-full px-5 py-4 bg-black/40 border-2 border-white/10 rounded-2xl text-white placeholder-gray-500 outline-none focus:border-purple-500 focus:bg-black/60 transition-all font-semibold text-lg"
+                className="w-full px-4 md:px-5 py-3 md:py-4 bg-black/40 border-2 border-white/10 rounded-2xl text-white placeholder-gray-500 outline-none focus:border-purple-500 focus:bg-black/60 transition-all font-semibold text-base md:text-lg"
               />
             </div>
 
-            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-white/20 to-transparent my-2"></div>
+            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-white/20 to-transparent my-1 md:my-2"></div>
 
             <button 
               onClick={handleCreateRoom}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg hover:shadow-[0_0_20px_rgba(236,72,153,0.5)] hover:-translate-y-1 transition-all"
+              className="w-full py-3 md:py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-base md:text-lg hover:shadow-[0_0_20px_rgba(236,72,153,0.5)] hover:-translate-y-1 transition-all"
             >
               ✨ 創立新房間
             </button>
 
-            <div className="flex gap-3 mt-2">
+            <div className="flex gap-2 md:gap-3 mt-1 md:mt-2">
               <input 
                 type="text" 
                 placeholder="輸入房號" 
                 value={roomCodeInput}
                 onChange={(e) => setRoomCodeInput(e.target.value)}
                 maxLength={6}
-                className="flex-grow px-5 py-4 bg-black/40 border-2 border-white/10 rounded-2xl text-white placeholder-gray-500 outline-none focus:border-cyan-500 text-center uppercase tracking-widest font-bold text-lg transition-all"
+                className="flex-grow min-w-0 px-3 md:px-5 py-3 md:py-4 bg-black/40 border-2 border-white/10 rounded-2xl text-white placeholder-gray-500 outline-none focus:border-cyan-500 text-center uppercase tracking-widest font-bold text-base md:text-lg transition-all"
               />
               <button 
                 onClick={handleJoinRoom}
-                className="px-6 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] hover:-translate-y-1 transition-all whitespace-nowrap"
+                className="px-4 md:px-6 py-3 md:py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] hover:-translate-y-1 transition-all whitespace-nowrap text-sm md:text-base"
               >
                 加入
               </button>

@@ -12,9 +12,6 @@
 @layer base {
   body {
     @apply bg-party-bg text-white font-outfit min-h-screen overflow-x-hidden;
-    background-image: 
-      radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.15) 0, transparent 50%);
   }
 }
 
