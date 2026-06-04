@@ -190,9 +190,11 @@ export default function App() {
             <div className="flex gap-2 md:gap-3 mt-1 md:mt-2">
               <input 
                 type="text" 
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="輸入房號" 
                 value={roomCodeInput}
-                onChange={(e) => setRoomCodeInput(e.target.value)}
+                onChange={(e) => setRoomCodeInput(e.target.value.replace(/[^0-9]/g, ''))}
                 maxLength={6}
                 className="flex-grow min-w-0 px-3 md:px-5 py-3 md:py-4 bg-black/40 border-2 border-white/10 rounded-2xl text-white placeholder-gray-500 outline-none focus:border-cyan-500 text-center uppercase tracking-widest font-bold text-base md:text-lg transition-all"
               />

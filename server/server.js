@@ -70,7 +70,7 @@ function getRandomQuestion(roomCode, type) {
 
 // 產生隨機房間代碼
 function generateRoomCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const chars = '0123456789';
   let result = '';
   for (let i = 0; i < 6; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
