@@ -41,11 +41,31 @@ try {
   DARE_CHALLENGES = ["用最浮誇的語氣對著牆壁告白一分鐘。", "模仿一隻喝醉的猩猩，維持 30 秒。"];
 }
 
-// 隨機獲取題目
-function getRandomQuestion(type) {
+const roomState = new Map(); // 用來記錄每個房間出過的題目與上次抽到的人
+
+// 隨機獲取不重複的題目
+function getRandomQuestion(roomCode, type) {
   const list = type === 'truth' ? TRUTH_QUESTIONS : DARE_CHALLENGES;
-  const randomIndex = Math.floor(Math.random() * list.length);
-  return list[randomIndex];
+  
+  if (!roomState.has(roomCode)) {
+    roomState.set(roomCode, { usedTruths: [], usedDares: [], lastSelectedId: null });
+  }
+  const state = roomState.get(roomCode);
+  const usedList = type === 'truth' ? state.usedTruths : state.usedDares;
+
+  // 過濾出還沒出過的題目
+  let available = list.filter(q => !usedList.includes(q));
+  
+  // 如果題庫抽完了，就清空紀錄重新來過
+  if (available.length === 0) {
+    usedList.length = 0;
+    available = list;
+  }
+
+  const randomIndex = Math.floor(Math.random() * available.length);
+  const picked = available[randomIndex];
+  usedList.push(picked);
+  return picked;
 }
 
 // 產生隨機房間代碼
@@ -172,9 +192,24 @@ io.on('connection', (socket) => {
         p.status = 'idle';
       });
 
-      // 隨機選擇一位玩家 (非房主或全體？派對遊戲通常全體皆可被抽中)
-      const randomIndex = Math.floor(Math.random() * room.players.length);
-      const selected = room.players[randomIndex];
+      // 取得房間狀態
+      if (!roomState.has(roomCode)) {
+        roomState.set(roomCode, { usedTruths: [], usedDares: [], lastSelectedId: null });
+      }
+      const state = roomState.get(roomCode);
+
+      // 隨機挑選玩家：如果房間人數 > 1，排除上一局剛被抽到的人，避免連續當選
+      let availablePlayers = room.players;
+      if (room.players.length > 1 && state.lastSelectedId) {
+        const others = room.players.filter(p => p._id !== state.lastSelectedId);
+        if (others.length > 0) availablePlayers = others;
+      }
+      
+      const randomIndex = Math.floor(Math.random() * availablePlayers.length);
+      const selected = availablePlayers[randomIndex];
+      
+      // 更新最後抽中紀錄
+      state.lastSelectedId = selected._id;
       selected.status = 'selected';
 
       room.currentRoundNumber += 1;
@@ -221,8 +256,8 @@ io.on('connection', (socket) => {
       player.status = 'answering';
       await room.save();
 
-      // 生成題目 (隨機選取)
-      const prompt = getRandomQuestion(choice);
+      // 生成題目 (隨機選取，避免重複)
+      const prompt = getRandomQuestion(roomCode, choice);
 
       // 更新 Round 紀錄
       await Round.findOneAndUpdate(
@@ -269,7 +304,7 @@ io.on('connection', (socket) => {
       const round = await Round.findOne({ roomCode, roundNumber: room.currentRoundNumber });
       if (!round) return socket.emit('error', { message: '找不到回合紀錄' });
 
-      const newPrompt = getRandomQuestion(round.choice);
+      const newPrompt = getRandomQuestion(roomCode, round.choice);
       
       round.questionPrompt = newPrompt;
       round.isSkipped = true;
@@ -342,6 +377,7 @@ io.on('connection', (socket) => {
         if (room.players.length === 0) {
           // 沒有人則直接刪除房間
           await Room.deleteOne({ roomCode: room.roomCode });
+          roomState.delete(room.roomCode); // 清除記憶體中的房間題庫紀錄
           console.log(`房間 ${room.roomCode} 已無人，自動關閉。`);
         } else {
           // 重新指派房主
