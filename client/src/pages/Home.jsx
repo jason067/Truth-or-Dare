@@ -27,7 +27,7 @@ export default function Home() {
       description: '用最刁鑽的問題，還原離奇的真相。',
       icon: '🐢',
       color: 'from-green-700 to-emerald-900',
-      active: false
+      active: true
     },
     {
       id: 'avalon',

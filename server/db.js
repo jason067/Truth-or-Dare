@@ -14,10 +14,11 @@ const PlayerSchema = new Schema({
 const RoomSchema = new Schema({
   roomCode: { type: String, required: true, unique: true, uppercase: true },
   gameType: { type: String, default: 'truth_or_dare' },
-  status: { type: String, default: 'waiting' }, // 'waiting', 'playing', 'finished', 'spy_voting', 'spy_result'
+  status: { type: String, default: 'waiting' }, // 'waiting', 'playing', 'finished', 'spy_voting', 'spy_result', 'turtle_playing', 'turtle_revealed'
   players: [PlayerSchema],
   currentRoundNumber: { type: Number, default: 0 },
   spyGameState: { type: Object, default: null },
+  turtleGameState: { type: Object, default: null },
   createdAt: { type: Date, default: Date.now, expires: 86400 } // 24小時後過期
 });
 
@@ -52,6 +53,7 @@ class InMemoryRoom {
     this.players = data.players || [];
     this.currentRoundNumber = data.currentRoundNumber || 0;
     this.spyGameState = data.spyGameState || null;
+    this.turtleGameState = data.turtleGameState || null;
     this.createdAt = new Date();
   }
 

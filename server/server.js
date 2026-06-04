@@ -49,6 +49,14 @@ try {
   SPY_WORDS = [["麥克風", "擴音器"], ["蘋果", "水蜜桃"]];
 }
 
+let TURTLE_WORDS = [];
+try {
+  TURTLE_WORDS = JSON.parse(fs.readFileSync(path.join(__dirname, 'turtleWords.json'), 'utf-8'));
+  console.log(`✅ 成功載入海龜湯題庫: ${TURTLE_WORDS.length} 題`);
+} catch (error) {
+  TURTLE_WORDS = [{ title: "預設海龜湯", surface: "預設湯面", bottom: "預設湯底" }];
+}
+
 const roomState = new Map(); // 用來記錄每個房間出過的題目與上次抽到的人
 
 // 隨機獲取不重複的題目
@@ -578,7 +586,53 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // 9. 用戶斷線處理
+  // 9. 海龜湯 (Turtle Soup) 專屬邏輯
+  // ==========================================
+  socket.on('startTurtleGame', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.gameType !== 'turtle_soup') return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return;
+
+      const puzzle = TURTLE_WORDS[Math.floor(Math.random() * TURTLE_WORDS.length)];
+
+      room.status = 'turtle_playing';
+      room.turtleGameState = {
+        title: puzzle.title,
+        surface: puzzle.surface,
+        bottom: puzzle.bottom,
+        isRevealed: false
+      };
+      
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('revealTurtleAnswer', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.gameType !== 'turtle_soup') return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return;
+
+      if (room.turtleGameState) {
+        room.status = 'turtle_revealed';
+        room.turtleGameState.isRevealed = true;
+        await room.save();
+        io.to(roomCode).emit('roomUpdated', room);
+        io.to(roomCode).emit('turtleAnswerRevealed');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  // ==========================================
+  // 10. 用戶斷線處理
   // ==========================================
   socket.on('disconnect', async () => {
     try {

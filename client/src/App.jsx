@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import TruthOrDare from './pages/TruthOrDare';
 import Spy from './pages/Spy';
+import TurtleSoup from './pages/TurtleSoup';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/truth-or-dare" element={<TruthOrDare />} />
         <Route path="/spy" element={<Spy />} />
+        <Route path="/turtle-soup" element={<TurtleSoup />} />
       </Routes>
     </Router>
   );
