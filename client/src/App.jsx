@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import TruthOrDare from './pages/TruthOrDare';
 import Spy from './pages/Spy';
 import TurtleSoup from './pages/TurtleSoup';
+import Casino from './pages/Casino';
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route path="/truth-or-dare" element={<TruthOrDare />} />
         <Route path="/spy" element={<Spy />} />
         <Route path="/turtle-soup" element={<TurtleSoup />} />
+        <Route path="/casino" element={<Casino />} />
       </Routes>
     </Router>
   );

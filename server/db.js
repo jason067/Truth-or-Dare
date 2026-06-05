@@ -8,17 +8,19 @@ const PlayerSchema = new Schema({
   score: { type: Number, default: 0 },
   points: { type: Number, default: 100 },
   isHost: { type: Boolean, default: false },
-  status: { type: String, default: 'waiting' } // 'waiting', 'idle', 'selected', 'choosing', 'answering', 'offline'
+  status: { type: String, default: 'waiting' }, // 'waiting', 'idle', 'selected', 'choosing', 'answering', 'offline', 'kicked', 'appealing'
+  coins: { type: Number, default: 1000 }
 }, { _id: true });
 
 const RoomSchema = new Schema({
   roomCode: { type: String, required: true, unique: true, uppercase: true },
   gameType: { type: String, default: 'truth_or_dare' },
-  status: { type: String, default: 'waiting' }, // 'waiting', 'playing', 'finished', 'spy_voting', 'spy_result', 'turtle_playing', 'turtle_revealed'
+  status: { type: String, default: 'waiting' }, // 'waiting', 'playing', 'finished', 'spy_voting', 'spy_result', 'turtle_playing', 'turtle_revealed', 'casino_betting', 'casino_result'
   players: [PlayerSchema],
   currentRoundNumber: { type: Number, default: 0 },
   spyGameState: { type: Object, default: null },
   turtleGameState: { type: Object, default: null },
+  casinoGameState: { type: Object, default: null },
   createdAt: { type: Date, default: Date.now, expires: 86400 } // 24小時後過期
 });
 
@@ -54,6 +56,7 @@ class InMemoryRoom {
     this.currentRoundNumber = data.currentRoundNumber || 0;
     this.spyGameState = data.spyGameState || null;
     this.turtleGameState = data.turtleGameState || null;
+    this.casinoGameState = data.casinoGameState || null;
     this.createdAt = new Date();
   }
 

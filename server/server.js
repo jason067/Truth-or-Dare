@@ -117,6 +117,7 @@ io.on('connection', (socket) => {
         nickname,
         score: 0,
         points: 100,
+        coins: 1000,
         isHost: true,
         status: 'idle'
       };
@@ -170,6 +171,7 @@ io.on('connection', (socket) => {
         nickname,
         score: 0,
         points: 100,
+        coins: 1000,
         isHost: false,
         status: 'idle'
       };
@@ -632,7 +634,116 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // 10. 用戶斷線處理
+  // 10. 皇家賭場：生死骰子 (Casino) 專屬邏輯
+  // ==========================================
+  socket.on('startCasinoRound', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.gameType !== 'casino') return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return;
+
+      room.status = 'casino_betting';
+      room.casinoGameState = {
+        phase: 'betting',
+        pot: 0,
+        bets: {},
+        rolls: {},
+        winners: []
+      };
+      
+      // 所有玩家重置狀態
+      room.players.forEach(p => p.status = 'waiting');
+
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('placeBet', async ({ roomCode, amount }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.gameType !== 'casino' || room.status !== 'casino_betting') return;
+      const player = room.players.find(p => p.socketId === socket.id);
+      if (!player || player.coins < amount || amount <= 0) return;
+
+      // 扣除金幣並加入獎池
+      player.coins -= amount;
+      room.casinoGameState.pot += amount;
+      room.casinoGameState.bets[player._id.toString()] = amount;
+      player.status = 'idle'; // 已下注
+
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('rollCasinoDice', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.gameType !== 'casino' || room.status !== 'casino_betting') return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return;
+
+      room.status = 'casino_result';
+      room.casinoGameState.phase = 'result';
+
+      let maxRoll = -1;
+      let winners = [];
+
+      // 幫所有有下注的玩家擲骰子
+      Object.keys(room.casinoGameState.bets).forEach(playerId => {
+        const roll = Math.floor(Math.random() * 100) + 1; // 1-100
+        room.casinoGameState.rolls[playerId] = roll;
+
+        if (roll > maxRoll) {
+          maxRoll = roll;
+          winners = [playerId];
+        } else if (roll === maxRoll) {
+          winners.push(playerId);
+        }
+      });
+
+      room.casinoGameState.winners = winners;
+
+      // 分配獎金
+      if (winners.length > 0) {
+        const winAmount = Math.floor(room.casinoGameState.pot / winners.length);
+        winners.forEach(wId => {
+          const w = room.players.find(p => p._id.toString() === wId);
+          if (w) w.coins += winAmount;
+        });
+      }
+
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+      io.to(roomCode).emit('casinoDiceRolled');
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('claimReliefFund', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room) return;
+      const player = room.players.find(p => p.socketId === socket.id);
+      if (!player || player.coins >= 500) return; // 破產才能領
+
+      player.coins += 1000;
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  // ==========================================
+  // 11. 用戶斷線處理
   // ==========================================
   socket.on('disconnect', async () => {
     try {

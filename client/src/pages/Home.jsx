@@ -30,6 +30,14 @@ export default function Home() {
       active: true
     },
     {
+      id: 'casino',
+      title: '皇家賭場',
+      description: '生死骰子，贏家通吃！',
+      icon: '🎰',
+      color: 'from-yellow-600 to-amber-800',
+      active: true
+    },
+    {
       id: 'avalon',
       title: '阿瓦隆',
       description: '正義與邪惡的對決，你該相信誰？',
