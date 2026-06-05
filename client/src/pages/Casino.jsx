@@ -15,6 +15,8 @@ export default function Casino() {
   const [myId, setMyId] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [myRoomCode, setMyRoomCode] = useState('');
+  const [isRolling, setIsRolling] = useState(false);
+  const [rollTick, setRollTick] = useState(0);
 
   useEffect(() => {
     socket = io(BACKEND_URL);
@@ -39,6 +41,19 @@ export default function Casino() {
     socket.on('kickedOut', () => {
       alert("你已被房主無情地永久踢出！");
       window.location.href = '/';
+    });
+
+    socket.on('casinoDiceRolled', () => {
+      setIsRolling(true);
+      let count = 0;
+      const interval = setInterval(() => {
+        setRollTick(c => c + 1);
+        count++;
+        if (count >= 30) {
+          clearInterval(interval);
+          setIsRolling(false);
+        }
+      }, 100);
     });
 
     return () => {
@@ -205,15 +220,19 @@ export default function Casino() {
             {room?.players.map((p) => {
               const isMe = p._id === myId;
               const playerBet = gameState?.bets?.[p._id] || 0;
-              const playerRoll = gameState?.rolls?.[p._id];
-              const isWinner = gameState?.winners?.includes(p._id);
+              let playerRoll = gameState?.rolls?.[p._id];
+              if (isRolling && playerBet > 0) {
+                playerRoll = Math.floor(Math.random() * 100) + 1;
+              }
+              const isWinner = !isRolling && gameState?.winners?.includes(p._id);
 
               return (
                 <div 
                   key={p._id} 
                   className={`relative p-4 rounded-2xl border transition-all duration-300
                     ${isMe ? 'bg-yellow-900/40 border-yellow-500/50' : 'bg-white/5 border-white/10'}
-                    ${isWinner && isResult ? 'bg-amber-600/40 border-amber-400 animate-pulse shadow-[0_0_15px_rgba(251,191,36,0.5)]' : ''}
+                    ${isWinner && isResult ? 'bg-amber-600/40 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.5)] scale-105' : ''}
+                    ${isRolling && playerBet > 0 ? 'border-yellow-400/50 bg-yellow-400/10' : ''}
                   `}
                 >
                   <div className="flex justify-between items-center mb-2">
@@ -229,8 +248,8 @@ export default function Casino() {
                       <span className="text-gray-400">
                         {p.status === 'idle' ? `已下注: ${playerBet}` : '思考中...'}
                       </span>
-                      {isResult && playerRoll !== undefined && (
-                        <span className="text-2xl font-black text-yellow-300 drop-shadow-md">
+                      {(isResult || isRolling) && playerRoll !== undefined && (
+                        <span className={`text-2xl font-black drop-shadow-md ${isRolling ? 'text-white blur-[1px]' : 'text-yellow-300'}`}>
                           🎲 {playerRoll}
                         </span>
                       )}
@@ -318,12 +337,14 @@ export default function Casino() {
                     </>
                   ) : (
                     <div className="py-6">
-                      <h3 className="text-2xl font-black text-yellow-400 animate-pulse">已下注，等待開獎...</h3>
+                      <h3 className="text-2xl font-black text-yellow-400 animate-pulse">
+                        {isRolling ? '🎲 骰子轉動中...' : '已下注，等待開獎...'}
+                      </h3>
                       <p className="text-gray-400 mt-2">你投入了 ${gameState.bets[myId]} 籌碼</p>
                     </div>
                   )}
 
-                  {isHost && (
+                  {isHost && !isRolling && (
                     <div className="mt-8 pt-6 border-t border-yellow-500/20">
                       <button 
                         onClick={handleRollDice}
@@ -337,11 +358,11 @@ export default function Casino() {
               )}
 
               {/* 結果展示區 */}
-              {isResult && (
+              {isResult && !isRolling && (
                 <div className="w-full text-center animate-fade-in-up mt-8">
                   {gameState.winners.includes(myId) ? (
                     <div className="mb-8">
-                      <h2 className="text-4xl md:text-5xl font-black text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)] mb-2">🎉 你贏了！🎉</h2>
+                      <h2 className="text-4xl md:text-5xl font-black text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)] mb-2 animate-bounce">🎉 你贏了！🎉</h2>
                       <p className="text-xl text-yellow-100">獨得獎金 ${gameState.pot}</p>
                     </div>
                   ) : (
