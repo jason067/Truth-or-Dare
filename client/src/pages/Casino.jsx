@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
 let socket;
@@ -8,7 +9,9 @@ let socket;
 export default function Casino() {
   const navigate = useNavigate();
   const [nickname, setNickname] = useState('');
-  const [roomCodeInput, setRoomCodeInput] = useState('');
+  const [roomCodeInput, setRoomCodeInput] = useState(() => {
+    return new URLSearchParams(window.location.search).get('roomCode') || '';
+  });
   const [isJoined, setIsJoined] = useState(false);
   const [room, setRoom] = useState(null);
   
@@ -17,6 +20,7 @@ export default function Casino() {
   const [myRoomCode, setMyRoomCode] = useState('');
   const [isRolling, setIsRolling] = useState(false);
   const [rollTick, setRollTick] = useState(0);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   useEffect(() => {
     socket = io(BACKEND_URL);
@@ -281,6 +285,12 @@ export default function Casino() {
                   >
                     🎲 開始生死骰子
                   </button>
+                  <button 
+                    className="px-8 py-3 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-200 font-bold text-lg hover:bg-blue-500/40 transition-all w-full flex items-center justify-center gap-2 mt-2"
+                    onClick={() => setShowQrModal(true)}
+                  >
+                    📱 顯示邀請 QR Code
+                  </button>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -398,6 +408,31 @@ export default function Casino() {
           )}
         </main>
       </div>
+
+      {/* QR Code 邀請 Modal */}
+      {showQrModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-gray-900 border border-white/20 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative flex flex-col items-center">
+            <button 
+              onClick={() => setShowQrModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl font-bold"
+            >
+              ✕
+            </button>
+            <h3 className="text-2xl font-black text-white mb-6 tracking-widest text-center">掃描加入遊戲</h3>
+            <div className="bg-white p-4 rounded-xl mb-6 shadow-lg">
+              <QRCodeSVG 
+                value={`${window.location.origin}/casino?roomCode=${myRoomCode}`} 
+                size={200}
+                bgColor={"#ffffff"}
+                fgColor={"#000000"}
+                level={"H"}
+              />
+            </div>
+            <p className="text-gray-300 text-center font-medium">房號：<span className="text-xl text-white font-black">{myRoomCode}</span></p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

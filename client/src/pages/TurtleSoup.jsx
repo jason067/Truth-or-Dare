@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
 let socket;
@@ -8,13 +9,16 @@ let socket;
 export default function TurtleSoup() {
   const navigate = useNavigate();
   const [nickname, setNickname] = useState('');
-  const [roomCodeInput, setRoomCodeInput] = useState('');
+  const [roomCodeInput, setRoomCodeInput] = useState(() => {
+    return new URLSearchParams(window.location.search).get('roomCode') || '';
+  });
   const [isJoined, setIsJoined] = useState(false);
   const [room, setRoom] = useState(null);
   
   const [myId, setMyId] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [myRoomCode, setMyRoomCode] = useState('');
+  const [showQrModal, setShowQrModal] = useState(false);
 
   useEffect(() => {
     socket = io(BACKEND_URL);
@@ -218,10 +222,16 @@ export default function TurtleSoup() {
                   <h3 className="text-2xl font-black text-green-100 drop-shadow-md">你是主持人</h3>
                   <p className="text-green-400/80 font-medium">當大家都準備好發問時，點擊下方按鈕開始熬湯！</p>
                   <button 
-                    className="mt-4 px-10 py-5 rounded-full font-black text-xl transition-all uppercase tracking-wider bg-gradient-to-r from-green-600 to-emerald-800 text-white hover:scale-105 hover:shadow-[0_0_40px_rgba(16,185,129,0.6)]"
+                    className="px-10 py-5 rounded-full font-black text-2xl transition-all uppercase tracking-wider bg-white text-black hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.4)]"
                     onClick={handleStartGame}
                   >
-                    🔪 開始熬湯
+                    🚀 出題並開始遊戲
+                  </button>
+                  <button 
+                    className="px-8 py-3 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-200 font-bold text-lg hover:bg-blue-500/40 transition-all w-full flex items-center justify-center gap-2 mt-2"
+                    onClick={() => setShowQrModal(true)}
+                  >
+                    📱 顯示邀請 QR Code
                   </button>
                 </div>
               ) : (
@@ -302,6 +312,31 @@ export default function TurtleSoup() {
 
         </main>
       </div>
+
+      {/* QR Code 邀請 Modal */}
+      {showQrModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-gray-900 border border-white/20 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative flex flex-col items-center">
+            <button 
+              onClick={() => setShowQrModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl font-bold"
+            >
+              ✕
+            </button>
+            <h3 className="text-2xl font-black text-white mb-6 tracking-widest text-center">掃描加入遊戲</h3>
+            <div className="bg-white p-4 rounded-xl mb-6 shadow-lg">
+              <QRCodeSVG 
+                value={`${window.location.origin}/turtle-soup?roomCode=${myRoomCode}`} 
+                size={200}
+                bgColor={"#ffffff"}
+                fgColor={"#000000"}
+                level={"H"}
+              />
+            </div>
+            <p className="text-gray-300 text-center font-medium">房號：<span className="text-xl text-white font-black">{myRoomCode}</span></p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
