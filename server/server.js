@@ -3,9 +3,10 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { Room, Round, User, createRoomInstance, createRoundInstance, createUserInstance, createId } = require('./db');
 
 dotenv.config();
+
+const { Room, Round, User, createRoomInstance, createRoundInstance, createUserInstance, createId } = require('./db');
 
 const app = express();
 app.use(cors());
