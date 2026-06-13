@@ -1,8 +1,27 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Home() {
   const navigate = useNavigate();
+  const { user, loginUser, logoutUser } = useAuth();
+
+  const handleLoginSuccess = (credentialResponse) => {
+    try {
+      const decoded = jwtDecode(credentialResponse.credential);
+      // decoded 包含: name, email, picture, sub(ID)
+      loginUser({
+        name: decoded.name,
+        email: decoded.email,
+        picture: decoded.picture,
+        id: decoded.sub
+      });
+    } catch (err) {
+      console.error("解析 Google Token 失敗", err);
+    }
+  };
 
   const games = [
     {
@@ -53,7 +72,35 @@ export default function Home() {
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[100px] pointer-events-none"></div>
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-600/20 rounded-full blur-[100px] pointer-events-none"></div>
 
-      <header className="mb-12 text-center relative z-10 pt-10">
+      {/* Auth Header */}
+      <div className="absolute top-4 right-4 md:top-8 md:right-8 z-50">
+        {user ? (
+          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 shadow-lg">
+            <img src={user.picture} alt="Avatar" className="w-8 h-8 rounded-full border border-white/30" />
+            <span className="text-white font-bold text-sm hidden md:inline">{user.name}</span>
+            <button 
+              onClick={logoutUser}
+              className="text-xs bg-red-500/20 text-red-300 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition-colors border border-red-500/30 font-bold"
+            >
+              登出
+            </button>
+          </div>
+        ) : (
+          <div className="shadow-xl rounded-lg overflow-hidden border border-white/10">
+            <GoogleLogin
+              onSuccess={handleLoginSuccess}
+              onError={() => {
+                console.error('Login Failed');
+              }}
+              shape="pill"
+              theme="filled_black"
+              text="signin_with"
+            />
+          </div>
+        )}
+      </div>
+
+      <header className="mb-12 text-center relative z-10 pt-16 md:pt-10">
         <h1 className="text-5xl md:text-7xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 drop-shadow-2xl mb-4 glow-text">
           PARTY HUB
         </h1>

@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
+import { useAuth } from '../contexts/AuthContext';
 
 const BACKEND_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
 let socket;
 
 export default function Spy() {
   const navigate = useNavigate();
-  const [nickname, setNickname] = useState('');
+  const { user } = useAuth();
+  const [nickname, setNickname] = useState(user?.name || '');
   const [roomCodeInput, setRoomCodeInput] = useState(() => {
     return new URLSearchParams(window.location.search).get('roomCode') || '';
   });
