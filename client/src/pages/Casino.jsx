@@ -191,7 +191,7 @@ export default function Casino() {
             <span className="text-yellow-500 tracking-widest font-black ml-1 md:ml-2">{myRoomCode}</span>
           </h2>
           <span className="bg-yellow-900/40 px-3 py-1 md:px-4 md:py-1.5 rounded-full text-xs md:text-sm font-semibold border border-yellow-500/30 text-yellow-200">
-            👥 {room?.players.length} 人
+            👥 {room?.players.filter(p => !['offline', 'kicked'].includes(p.status)).length} 人
           </span>
         </div>
         <div className="flex items-center gap-4">

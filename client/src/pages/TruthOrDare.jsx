@@ -255,7 +255,7 @@ export default function TruthOrDare() {
             <span className="text-cyan-400 tracking-widest font-black ml-1 md:ml-2 glow-text">{myRoomCode}</span>
           </h2>
           <span className="bg-white/10 px-3 py-1 md:px-4 md:py-1.5 rounded-full text-xs md:text-sm font-semibold border border-white/10 text-indigo-200 whitespace-nowrap">
-            👥 {room?.players.length} 人
+            👥 {room?.players.filter(p => !['offline', 'kicked'].includes(p.status)).length} 人
           </span>
         </div>
         <button 

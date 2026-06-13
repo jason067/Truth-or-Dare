@@ -158,10 +158,18 @@ io.on('connection', (socket) => {
         return socket.emit('error', { message: '遊戲已經開始，無法加入！' });
       }
 
-      // 檢查暱稱是否重複
-      const isNameTaken = room.players.some(p => p.nickname === nickname && p.status !== 'offline');
-      if (isNameTaken) {
-        return socket.emit('error', { message: '此暱稱已在房間中，請換一個暱稱！' });
+      // 檢查暱稱是否重複，如果重複則視為重新連線接管該角色
+      const existingPlayer = room.players.find(p => p.nickname === nickname);
+      if (existingPlayer) {
+        existingPlayer.socketId = socket.id;
+        if (existingPlayer.status === 'offline' || existingPlayer.status === 'kicked') {
+          existingPlayer.status = 'idle';
+        }
+        await room.save();
+        socket.join(code);
+        socket.emit('joinSuccess', { playerId: existingPlayer._id, isHost: existingPlayer.isHost, roomCode: code });
+        io.to(code).emit('roomUpdated', room);
+        return;
       }
 
       const playerId = createId();
