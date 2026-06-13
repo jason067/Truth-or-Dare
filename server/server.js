@@ -3,7 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { Room, Round, createRoomInstance, createRoundInstance, createId } = require('./db');
+const { Room, Round, User, createRoomInstance, createRoundInstance, createUserInstance, createId } = require('./db');
 
 dotenv.config();
 
@@ -14,6 +14,58 @@ app.use(express.json());
 // 簡單的 HTTP 測試路由
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date() });
+});
+
+// Google 登入紀錄 API
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { id, name, email, picture } = req.body;
+    if (!id || !name || !email) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    let user = await User.findOne({ googleId: id });
+    if (user) {
+      user.lastLoginAt = new Date();
+      user.name = name;
+      user.picture = picture;
+      await user.save();
+    } else {
+      user = createUserInstance({
+        googleId: id,
+        name,
+        email,
+        picture
+      });
+      await user.save();
+    }
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error("Auth API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 管理員後台：獲取所有用戶名單 API
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    let users = [];
+    if (typeof User.find === 'function') {
+      users = await User.find();
+      // 如果支援 sort (mongoose) 則使用，否則我們在前端排序或這裡用原生 JS 排序
+      if (users.sort && typeof users[0]?.save === 'function') { // Check if it's an array or a mongoose Query
+          // For mongoose
+          users = await User.find().sort({ lastLoginAt: -1 });
+      } else {
+          // For memory db array
+          users.sort((a, b) => new Date(b.lastLoginAt) - new Date(a.lastLoginAt));
+      }
+    }
+    res.json(users);
+  } catch (error) {
+    console.error("Admin Users API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 const server = http.createServer(app);

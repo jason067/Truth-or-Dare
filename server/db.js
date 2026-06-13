@@ -2,6 +2,16 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 // 1. 定義 Mongoose Schemas
+const UserSchema = new Schema({
+  googleId: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  picture: { type: String },
+  lastLoginAt: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now }
+});
+
+
 const PlayerSchema = new Schema({
   socketId: { type: String, required: true },
   nickname: { type: String, required: true },
@@ -40,6 +50,7 @@ const RoundSchema = new Schema({
 const memoryDb = {
   rooms: [],
   rounds: [],
+  users: [],
   
   createId() {
     return new mongoose.Types.ObjectId().toString();
@@ -91,6 +102,28 @@ class InMemoryRound {
   }
 }
 
+class InMemoryUser {
+  constructor(data) {
+    this._id = memoryDb.createId();
+    this.googleId = data.googleId;
+    this.name = data.name;
+    this.email = data.email;
+    this.picture = data.picture;
+    this.lastLoginAt = data.lastLoginAt || new Date();
+    this.createdAt = new Date();
+  }
+
+  async save() {
+    const idx = memoryDb.users.findIndex(u => u.googleId === this.googleId);
+    if (idx !== -1) {
+      memoryDb.users[idx] = this;
+    } else {
+      memoryDb.users.push(this);
+    }
+    return this;
+  }
+}
+
 // 靜態方法模擬 Mongoose API
 const MockRoomAPI = {
   async findOne(query) {
@@ -138,9 +171,23 @@ const MockRoundAPI = {
   }
 };
 
+const MockUserAPI = {
+  async findOne(query) {
+    if (query.googleId) {
+      const found = memoryDb.users.find(u => u.googleId === query.googleId);
+      return found ? Object.assign(Object.create(InMemoryUser.prototype), found) : null;
+    }
+    return null;
+  },
+  async find() {
+    return memoryDb.users.map(u => Object.assign(Object.create(InMemoryUser.prototype), u));
+  }
+};
+
 // 預設直接開啟 In-Memory Mock，防止異步連線過程中 Room 為 undefined
 let RoomModel = MockRoomAPI;
 let RoundModel = MockRoundAPI;
+let UserModel = MockUserAPI;
 let isInMemory = true;
 
 // 3. 連線資料庫並決定使用何種模型
@@ -153,6 +200,7 @@ mongoose.connect(mongoUri, {
   console.log('✅ MongoDB 連線成功。已將資料模型切換至實體 MongoDB。');
   RoomModel = mongoose.model('Room', RoomSchema);
   RoundModel = mongoose.model('Round', RoundSchema);
+  UserModel = mongoose.model('User', UserSchema);
   isInMemory = false;
 })
 .catch((err) => {
@@ -179,12 +227,23 @@ function createRoundInstance(data) {
   }
 }
 
+function createUserInstance(data) {
+  if (isInMemory) {
+    return new InMemoryUser(data);
+  } else {
+    const MongooseUser = mongoose.model('User');
+    return new MongooseUser(data);
+  }
+}
+
 // 導出模組
 module.exports = {
   get Room() { return RoomModel; },
   get Round() { return RoundModel; },
+  get User() { return UserModel; },
   createRoomInstance,
   createRoundInstance,
+  createUserInstance,
   getIsInMemory: () => isInMemory,
   createId: () => isInMemory ? MockRoomAPI.createId() : new mongoose.Types.ObjectId().toString()
 };

@@ -7,6 +7,7 @@ import TruthOrDare from './pages/TruthOrDare';
 import Spy from './pages/Spy';
 import TurtleSoup from './pages/TurtleSoup';
 import Casino from './pages/Casino';
+import AdminDashboard from './pages/AdminDashboard';
 
 // 從環境變數讀取 Google Client ID，如果沒有則使用假 ID 避免畫面崩潰
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'mock-client-id-please-replace-me';
@@ -22,6 +23,7 @@ export default function App() {
             <Route path="/spy" element={<Spy />} />
             <Route path="/turtle-soup" element={<TurtleSoup />} />
             <Route path="/casino" element={<Casino />} />
+            <Route path="/admin" element={<AdminDashboard />} />
           </Routes>
         </Router>
       </AuthProvider>

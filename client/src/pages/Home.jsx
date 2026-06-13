@@ -4,11 +4,13 @@ import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { useAuth } from '../contexts/AuthContext';
 
+const BACKEND_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
+
 export default function Home() {
   const navigate = useNavigate();
   const { user, loginUser, logoutUser } = useAuth();
 
-  const handleLoginSuccess = (credentialResponse) => {
+  const handleLoginSuccess = async (credentialResponse) => {
     try {
       const decoded = jwtDecode(credentialResponse.credential);
       // decoded 包含: name, email, picture, sub(ID)
@@ -18,6 +20,22 @@ export default function Home() {
         picture: decoded.picture,
         id: decoded.sub
       });
+
+      // 將資料送到後端儲存
+      try {
+        await fetch(`${BACKEND_URL}/api/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: decoded.sub,
+            name: decoded.name,
+            email: decoded.email,
+            picture: decoded.picture
+          })
+        });
+      } catch (err) {
+        console.error("同步使用者資料至後端失敗", err);
+      }
     } catch (err) {
       console.error("解析 Google Token 失敗", err);
     }
