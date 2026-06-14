@@ -4,11 +4,18 @@ import { useNavigate } from 'react-router-dom';
 const BACKEND_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
 
 export default function AdminDashboard() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState('');
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const fetchUsers = async () => {
       try {
         const response = await fetch(`${BACKEND_URL}/api/admin/users`);
@@ -27,7 +34,67 @@ export default function AdminDashboard() {
     };
     
     fetchUsers();
-  }, []);
+  }, [isAuthenticated]);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (usernameInput === 'k67' && passwordInput === '6767') {
+      setIsAuthenticated(true);
+      setAuthError('');
+    } else {
+      setAuthError('帳號或密碼錯誤！');
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden text-white">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-[100px] pointer-events-none"></div>
+        <button 
+          onClick={() => navigate('/')}
+          className="absolute top-6 left-6 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all z-20"
+        >
+          🔙 回大廳
+        </button>
+        
+        <div className="relative z-10 glass-panel p-8 md:p-12 rounded-3xl border border-white/10 shadow-2xl max-w-md w-full mx-4">
+          <h1 className="text-3xl font-black mb-8 text-center text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+            後台身分驗證
+          </h1>
+          <form onSubmit={handleLogin} className="flex flex-col gap-6">
+            <div>
+              <label className="block text-gray-400 mb-2 font-bold">帳號</label>
+              <input 
+                type="text" 
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                placeholder="請輸入管理員帳號"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-gray-400 mb-2 font-bold">密碼</label>
+              <input 
+                type="password" 
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                placeholder="請輸入密碼"
+              />
+            </div>
+            {authError && <p className="text-red-400 text-sm font-bold">{authError}</p>}
+            <button 
+              type="submit" 
+              className="w-full mt-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-4 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-cyan-500/30"
+            >
+              登入後台
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen p-6 md:p-12 relative overflow-hidden text-white">
