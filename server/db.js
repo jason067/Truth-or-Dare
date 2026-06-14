@@ -289,12 +289,40 @@ function createChatInstance(data) {
   }
 }
 
+const RoomProxy = new Proxy({}, {
+  get(target, prop) {
+    if (typeof RoomModel[prop] === 'function') return RoomModel[prop].bind(RoomModel);
+    return RoomModel[prop];
+  }
+});
+
+const RoundProxy = new Proxy({}, {
+  get(target, prop) {
+    if (typeof RoundModel[prop] === 'function') return RoundModel[prop].bind(RoundModel);
+    return RoundModel[prop];
+  }
+});
+
+const UserProxy = new Proxy({}, {
+  get(target, prop) {
+    if (typeof UserModel[prop] === 'function') return UserModel[prop].bind(UserModel);
+    return UserModel[prop];
+  }
+});
+
+const ChatProxy = new Proxy({}, {
+  get(target, prop) {
+    if (typeof ChatModel[prop] === 'function') return ChatModel[prop].bind(ChatModel);
+    return ChatModel[prop];
+  }
+});
+
 // 導出模組
 module.exports = {
-  get Room() { return RoomModel; },
-  get Round() { return RoundModel; },
-  get User() { return UserModel; },
-  get Chat() { return ChatModel; },
+  Room: RoomProxy,
+  Round: RoundProxy,
+  User: UserProxy,
+  Chat: ChatProxy,
   createRoomInstance,
   createRoundInstance,
   createUserInstance,
