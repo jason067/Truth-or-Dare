@@ -5,8 +5,10 @@ const { Schema } = mongoose;
 const UserSchema = new Schema({
   googleId: { type: String, required: true, unique: true },
   name: { type: String, required: true },
-  email: { type: String, required: true },
+  email: { type: String, required: true }, // 訪客可以設為 guest@partyhub.local
   picture: { type: String },
+  isMuted: { type: Boolean, default: false },
+  isBanned: { type: Boolean, default: false },
   lastLoginAt: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now }
 });
@@ -14,6 +16,8 @@ const UserSchema = new Schema({
 const ChatSchema = new Schema({
   user: { type: String, required: true },
   message: { type: String, required: true },
+  type: { type: String, default: 'text' }, // 'text' 或 'invite'
+  payload: { type: Object, default: null }, // 例如 { roomCode, gameType }
   time: { type: Date, default: Date.now }
 });
 
@@ -116,6 +120,8 @@ class InMemoryUser {
     this.name = data.name;
     this.email = data.email;
     this.picture = data.picture;
+    this.isMuted = data.isMuted || false;
+    this.isBanned = data.isBanned || false;
     this.lastLoginAt = data.lastLoginAt || new Date();
     this.createdAt = new Date();
   }
@@ -136,6 +142,8 @@ class InMemoryChat {
     this._id = memoryDb.createId();
     this.user = data.user;
     this.message = data.message;
+    this.type = data.type || 'text';
+    this.payload = data.payload || null;
     this.time = data.time || new Date();
   }
 
@@ -203,10 +211,20 @@ const MockUserAPI = {
       const found = memoryDb.users.find(u => u.googleId === query.googleId);
       return found ? Object.assign(Object.create(InMemoryUser.prototype), found) : null;
     }
+    if (query._id) {
+      const found = memoryDb.users.find(u => u._id === query._id);
+      return found ? Object.assign(Object.create(InMemoryUser.prototype), found) : null;
+    }
     return null;
   },
   async find() {
     return memoryDb.users.map(u => Object.assign(Object.create(InMemoryUser.prototype), u));
+  },
+  async deleteOne(query) {
+    if (query._id) {
+      memoryDb.users = memoryDb.users.filter(u => u._id !== query._id);
+    }
+    return { deletedCount: 1 };
   }
 };
 
@@ -223,6 +241,12 @@ const MockChatAPI = {
         }
       }
     };
+  },
+  async deleteOne(query) {
+    if (query._id) {
+      memoryDb.chats = memoryDb.chats.filter(c => c._id !== query._id);
+    }
+    return { deletedCount: 1 };
   }
 };
 

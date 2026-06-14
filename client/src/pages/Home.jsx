@@ -9,12 +9,13 @@ const BACKEND_URL = import.meta.env.VITE_API_URL || (window.location.hostname ==
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, loginUser, logoutUser } = useAuth();
+  const { user, loginUser, loginGuest, logoutUser } = useAuth();
   
   // 密碼鎖狀態
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
+  const [guestName, setGuestName] = useState('');
 
   // 大廳狀態
   const [socket, setSocket] = useState(null);
@@ -40,6 +41,19 @@ export default function Home() {
 
     newSocket.on('systemBroadcast', (data) => {
       alert(`📢 系統廣播：\n${data.message}`);
+    });
+
+    newSocket.on('error', (data) => {
+      alert(`⚠️ 錯誤：\n${data.message}`);
+      if (data.message.includes('封鎖')) {
+         logoutUser();
+         setIsUnlocked(false);
+      }
+    });
+    
+    // 如果聊天被管理員刪除
+    newSocket.on('chatDeleted', (chatId) => {
+      setChatMessages(prev => prev.filter(c => c._id !== chatId));
     });
 
     // 載入歷史聊天紀錄
@@ -111,10 +125,13 @@ export default function Home() {
 
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!chatInput.trim() || !socket) return;
+    if (!chatInput.trim() || !socket || !user) return;
     
-    const senderName = user ? user.name : '匿名訪客';
-    socket.emit('sendLobbyMessage', { user: senderName, message: chatInput });
+    socket.emit('sendLobbyMessage', { 
+      userId: user.googleId || user.id, // Mongoose returns googleId, OAuth returns id
+      user: user.name, 
+      message: chatInput 
+    });
     setChatInput('');
   };
 
@@ -165,6 +182,58 @@ export default function Home() {
   }
 
   // ==========================================
+  // 身分選擇畫面 (Login or Guest)
+  // ==========================================
+  if (isUnlocked && !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-black text-white">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[100px]"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-600/20 rounded-full blur-[100px]"></div>
+        
+        <div className="relative z-10 glass-panel p-10 rounded-3xl border border-white/10 shadow-2xl max-w-sm w-full text-center">
+          <h2 className="text-2xl font-black mb-6 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">選擇您的身分</h2>
+          
+          <div className="mb-8">
+            <p className="text-gray-400 text-xs font-bold mb-4">使用 Google 快速登入，保存您的戰績</p>
+            <div className="flex justify-center shadow-lg rounded-full overflow-hidden border border-white/10">
+              <GoogleLogin onSuccess={handleLoginSuccess} onError={() => {}} shape="pill" theme="filled_black" text="signin_with" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 mb-8">
+            <div className="h-px bg-white/10 flex-1"></div>
+            <span className="text-gray-500 font-bold text-xs">或者</span>
+            <div className="h-px bg-white/10 flex-1"></div>
+          </div>
+
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            if (!guestName.trim()) return alert('請輸入暱稱！');
+            const res = await loginGuest(guestName);
+            if (!res.success) alert(res.error);
+          }}>
+            <p className="text-gray-400 text-xs font-bold mb-4">以訪客身分快速遊玩</p>
+            <input 
+              type="text" 
+              value={guestName}
+              onChange={(e) => setGuestName(e.target.value)}
+              className="w-full bg-black/50 border border-white/20 rounded-xl p-3 text-center text-white focus:outline-none focus:border-purple-500 transition-colors mb-4"
+              placeholder="輸入您的暱稱"
+              maxLength={15}
+            />
+            <button 
+              type="submit" 
+              className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all border border-white/10"
+            >
+              訪客進入大廳
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
   // 解鎖後的主大廳 (Unlocked Lobby)
   // ==========================================
   return (
@@ -190,7 +259,19 @@ export default function Home() {
                   <span className="font-bold text-cyan-300 text-sm">{msg.user}</span>
                   <span className="text-[10px] text-gray-500">{new Date(msg.time).toLocaleTimeString()}</span>
                 </div>
-                <div className="text-gray-200 text-sm break-words">{msg.message}</div>
+                {msg.type === 'invite' ? (
+                  <div className="bg-black/40 border border-purple-500/30 p-3 rounded-xl mt-2">
+                    <p className="text-purple-300 font-bold text-sm mb-2">{msg.message}</p>
+                    <button 
+                      onClick={() => navigate(`/${msg.payload?.gameType}?join=${msg.payload?.roomCode}`)}
+                      className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold py-1.5 px-4 rounded-lg shadow-lg shadow-purple-500/20"
+                    >
+                      點擊加入 [{msg.payload?.roomCode}]
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-gray-200 text-sm break-words">{msg.message}</div>
+                )}
               </div>
             ))
           )}
@@ -219,19 +300,13 @@ export default function Home() {
             </h1>
           </div>
           <div>
-            {user ? (
-              <div className="flex items-center gap-3">
-                <span className="text-gray-300 font-bold text-sm hidden md:inline">{user.name}</span>
-                <img src={user.picture} alt="Avatar" className="w-10 h-10 rounded-full border-2 border-cyan-500" />
-                <button onClick={logoutUser} className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-full hover:bg-red-500 hover:text-white transition-colors border border-red-500/30 font-bold">
-                  登出
-                </button>
-              </div>
-            ) : (
-              <div className="shadow-lg rounded-full overflow-hidden border border-white/10">
-                <GoogleLogin onSuccess={handleLoginSuccess} onError={() => {}} shape="pill" theme="filled_black" text="signin_with" />
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              <span className="text-gray-300 font-bold text-sm hidden md:inline">{user.name}</span>
+              <img src={user.picture} alt="Avatar" className="w-10 h-10 rounded-full border-2 border-cyan-500" />
+              <button onClick={logoutUser} className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-full hover:bg-red-500 hover:text-white transition-colors border border-red-500/30 font-bold">
+                登出
+              </button>
+            </div>
           </div>
         </div>
 

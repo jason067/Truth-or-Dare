@@ -45,21 +45,98 @@ app.post('/api/auth/google', async (req, res) => {
     console.error("Auth API Error:", error);
     res.status(500).json({ error: 'Server error' });
   }
+// 訪客登入 API
+app.post('/api/auth/guest', async (req, res) => {
+  try {
+    const { name, guestId } = req.body;
+    if (!name || !guestId) return res.status(400).json({ error: 'Missing fields' });
+
+    let user = await db.User.findOne({ googleId: guestId });
+    if (user) {
+      if (user.isBanned) return res.status(403).json({ error: '此帳號已被封鎖' });
+      user.lastLoginAt = new Date();
+      user.name = name;
+      await user.save();
+    } else {
+      user = db.createUserInstance({
+        googleId: guestId,
+        name,
+        email: `guest_${guestId}@partyhub.local`,
+        picture: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + guestId
+      });
+      await user.save();
+    }
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error("Guest Auth Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // 管理員後台：獲取所有用戶名單 API
 app.get('/api/admin/users', async (req, res) => {
   try {
     let users = [];
-    if (typeof User.find === 'function') {
-      const result = await User.find();
-      // 不管是 Mongoose 還是 Mock DB，都在記憶體裡手動排序
+    if (typeof db.User.find === 'function') {
+      const result = await db.User.find();
       users = Array.isArray(result) ? [...result] : result;
       users.sort((a, b) => new Date(b.lastLoginAt) - new Date(a.lastLoginAt));
     }
     res.json(users);
   } catch (error) {
     console.error("Admin Users API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 手動新增用戶 API
+app.post('/api/admin/users', async (req, res) => {
+  try {
+    const { name, email, picture } = req.body;
+    const user = db.createUserInstance({
+      googleId: 'manual_' + Date.now(),
+      name: name || '新用戶',
+      email: email || 'manual@partyhub.local',
+      picture: picture || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + Date.now()
+    });
+    await user.save();
+    res.json({ success: true, user });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 手動刪除用戶 API
+app.delete('/api/admin/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    await db.User.deleteOne({ _id: userId });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 變更用戶狀態 (禁言/封鎖) API
+app.post('/api/admin/users/:userId/action', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { action } = req.body; // 'mute', 'unmute', 'ban', 'unban'
+    
+    // 注意：MongoDB 的 _id 查詢要麼直接傳 string，要麼傳 ObjectId。如果用 mockDB 則是 string。
+    const users = await db.User.find();
+    const user = users.find(u => u._id.toString() === userId);
+    
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (action === 'mute') user.isMuted = true;
+    if (action === 'unmute') user.isMuted = false;
+    if (action === 'ban') user.isBanned = true;
+    if (action === 'unban') user.isBanned = false;
+
+    await user.save();
+    res.json({ success: true, user });
+  } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -183,13 +260,65 @@ app.get('/api/lobby/status', async (req, res) => {
 app.get('/api/lobby/chat', async (req, res) => {
   try {
     let chats = [];
-    if (typeof Chat.find === 'function') {
-      chats = await Chat.find().sort({ time: -1 }).limit(50);
+    if (typeof db.Chat.find === 'function') {
+      chats = await db.Chat.find().sort({ time: -1 }).limit(50);
       chats = chats.reverse(); // 讓舊的在前面，新的在後面
     }
     res.json(chats);
   } catch (error) {
     console.error("Lobby Chat API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 管理員刪除大廳聊天紀錄
+app.delete('/api/admin/chat/:chatId', async (req, res) => {
+  try {
+    await db.Chat.deleteOne({ _id: req.params.chatId });
+    // 通知所有人更新聊天
+    io.emit('chatDeleted', req.params.chatId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 發送揪團邀請至大廳 API
+app.post('/api/lobby/invite', async (req, res) => {
+  try {
+    const { userId, user, roomCode, gameType } = req.body;
+    
+    // 檢查禁言與封鎖
+    if (userId) {
+      const users = await db.User.find();
+      const dbUser = users.find(u => u.googleId === userId || u._id.toString() === userId);
+      if (dbUser && dbUser.isBanned) return res.status(403).json({ error: '您已被封鎖。' });
+      if (dbUser && dbUser.isMuted) return res.status(403).json({ error: '您已被禁言。' });
+    }
+
+    const gameNames = {
+      'truth-or-dare': '真心話大冒險',
+      'spy': '誰是臥底',
+      'turtle-soup': '海龜湯',
+      'casino': '皇家賭場'
+    };
+
+    const chatMsg = {
+      user: user || '匿名玩家',
+      message: `我建立了一個【${gameNames[gameType] || gameType}】房間，快來加入！`,
+      type: 'invite',
+      payload: { roomCode, gameType },
+      time: new Date()
+    };
+    
+    const newChat = db.createChatInstance(chatMsg);
+    await newChat.save();
+    chatMsg._id = newChat._id.toString();
+
+    io.emit('lobbyMessage', chatMsg);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Invite Error:", error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -279,16 +408,29 @@ io.on('connection', (socket) => {
   // 大廳全服聊天室 (Lobby Chat)
   // ==========================================
   socket.on('sendLobbyMessage', async (data) => {
+    // 檢查禁言與封鎖
+    if (data.userId) {
+      const users = await db.User.find();
+      const user = users.find(u => u.googleId === data.userId || u._id.toString() === data.userId);
+      if (user && user.isBanned) return socket.emit('error', { message: '您已被封鎖，無法發言。' });
+      if (user && user.isMuted) return socket.emit('error', { message: '您已被禁言。' });
+    }
+
     const chatMsg = {
       user: data.user,
       message: data.message,
+      type: data.type || 'text',
+      payload: data.payload || null,
       time: new Date()
     };
     
     // 儲存到資料庫
     try {
-      const newChat = createChatInstance(chatMsg);
+      const newChat = db.createChatInstance(chatMsg);
       await newChat.save();
+      
+      // 將 _id 賦值給廣播物件，讓前端可以識別並讓管理員刪除
+      chatMsg._id = newChat._id.toString();
     } catch(e) {
       console.error("儲存聊天訊息失敗:", e);
     }

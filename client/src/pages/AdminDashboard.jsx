@@ -12,6 +12,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('users');
   const [users, setUsers] = useState([]);
   const [rooms, setRooms] = useState([]);
+  const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(false);
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const navigate = useNavigate();
@@ -46,10 +47,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchChats = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/chat`);
+      if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+      const data = await response.json();
+      setChats(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("無法獲取聊天紀錄", error);
+      setChats([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isAuthenticated) return;
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'rooms') fetchRooms();
+    if (activeTab === 'chats') fetchChats();
   }, [isAuthenticated, activeTab]);
 
   const handleLogin = (e) => {
@@ -112,6 +129,56 @@ export default function AdminDashboard() {
       fetchRooms();
     } catch (err) {
       alert('加錢失敗！');
+    }
+  };
+
+  const handleUserAction = async (userId, action) => {
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/users/${userId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+      fetchUsers();
+    } catch (err) {
+      alert('操作失敗！');
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm('確定要刪除該用戶嗎？')) return;
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/users/${userId}`, { method: 'DELETE' });
+      fetchUsers();
+    } catch (err) {
+      alert('刪除失敗！');
+    }
+  };
+
+  const handleDeleteChat = async (chatId) => {
+    if (!window.confirm('確定要刪除該聊天訊息嗎？')) return;
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/chat/${chatId}`, { method: 'DELETE' });
+      fetchChats();
+    } catch (err) {
+      alert('刪除失敗！');
+    }
+  };
+
+  const [newUserName, setNewUserName] = useState('');
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    if (!newUserName.trim()) return;
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newUserName.trim() })
+      });
+      setNewUserName('');
+      fetchUsers();
+    } catch (err) {
+      alert('新增失敗！');
     }
   };
 
@@ -192,6 +259,12 @@ export default function AdminDashboard() {
           🎮 房間管理
         </button>
         <button 
+          onClick={() => setActiveTab('chats')}
+          className={`px-4 py-3 rounded-xl font-bold transition-all text-left ${activeTab === 'chats' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/30' : 'bg-white/5 hover:bg-white/10'}`}
+        >
+          💬 聊天管理
+        </button>
+        <button 
           onClick={() => setActiveTab('broadcast')}
           className={`px-4 py-3 rounded-xl font-bold transition-all text-left ${activeTab === 'broadcast' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : 'bg-white/5 hover:bg-white/10'}`}
         >
@@ -212,21 +285,36 @@ export default function AdminDashboard() {
 
         {activeTab === 'users' && (
           <div>
-            <h3 className="text-xl font-bold mb-4">會員登入紀錄</h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">會員登入紀錄</h3>
+              <form onSubmit={handleAddUser} className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={newUserName}
+                  onChange={e => setNewUserName(e.target.value)}
+                  placeholder="輸入新用戶名稱" 
+                  className="px-3 py-1 bg-black/40 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                />
+                <button type="submit" className="px-3 py-1 bg-green-500/20 hover:bg-green-500/40 text-green-400 border border-green-500/30 rounded-lg text-sm font-bold transition-colors">
+                  新增用戶
+                </button>
+              </form>
+            </div>
             <div className="overflow-x-auto rounded-xl border border-white/10">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-black/50 border-b border-white/10 text-sm tracking-wider uppercase text-gray-400">
                     <th className="p-4 font-bold">用戶</th>
                     <th className="p-4 font-bold hidden md:table-cell">Email</th>
-                    <th className="p-4 font-bold text-right">最後登入</th>
+                    <th className="p-4 font-bold text-center">狀態</th>
+                    <th className="p-4 font-bold text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody className="bg-black/20">
                   {users.length === 0 ? (
-                    <tr><td colSpan="3" className="p-8 text-center text-gray-500">沒有紀錄</td></tr>
+                    <tr><td colSpan="4" className="p-8 text-center text-gray-500">沒有紀錄</td></tr>
                   ) : users.map(u => (
-                    <tr key={u.googleId || Math.random()} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <tr key={u._id || u.googleId || Math.random()} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           {u.picture ? (
@@ -237,13 +325,33 @@ export default function AdminDashboard() {
                             </div>
                           )}
                           <div>
-                            <div className="font-bold">{u.name || 'Unknown User'}</div>
+                            <div className="font-bold text-white flex items-center gap-2">
+                              {u.name || 'Unknown User'}
+                              {u.isMuted && <span className="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-md border border-yellow-500/30">禁言中</span>}
+                              {u.isBanned && <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-400 rounded-md border border-red-500/30">已封鎖</span>}
+                            </div>
                             <div className="text-xs text-gray-500 md:hidden">{u.email || 'No Email'}</div>
                           </div>
                         </div>
                       </td>
                       <td className="p-4 text-gray-300 hidden md:table-cell">{u.email || 'No Email'}</td>
-                      <td className="p-4 text-right text-gray-400 text-sm">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'N/A'}</td>
+                      <td className="p-4 text-center">
+                        <div className="flex flex-col gap-1 text-xs">
+                          {u.isMuted ? (
+                            <button onClick={() => handleUserAction(u._id, 'unmute')} className="px-2 py-1 bg-yellow-500/10 hover:bg-yellow-500/30 text-yellow-400 rounded border border-yellow-500/30">解除禁言</button>
+                          ) : (
+                            <button onClick={() => handleUserAction(u._id, 'mute')} className="px-2 py-1 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-yellow-400 rounded border border-white/10">禁言</button>
+                          )}
+                          {u.isBanned ? (
+                            <button onClick={() => handleUserAction(u._id, 'unban')} className="px-2 py-1 bg-red-500/10 hover:bg-red-500/30 text-red-400 rounded border border-red-500/30">解除封鎖</button>
+                          ) : (
+                            <button onClick={() => handleUserAction(u._id, 'ban')} className="px-2 py-1 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-red-400 rounded border border-white/10">封鎖</button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button onClick={() => handleDeleteUser(u._id)} className="px-3 py-1 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg border border-red-600/30 text-sm font-bold transition-colors">刪除</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -316,6 +424,37 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'chats' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">大廳聊天管理</h3>
+              <button onClick={fetchChats} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-bold transition-colors">🔄 重新整理</button>
+            </div>
+            <div className="space-y-4 max-w-4xl">
+              {chats.length === 0 ? (
+                <div className="p-8 text-center text-gray-500 bg-black/20 rounded-xl border border-white/5 font-bold">沒有聊天紀錄</div>
+              ) : chats.map(chat => (
+                <div key={chat._id} className="bg-black/40 border border-white/10 p-4 rounded-xl flex justify-between items-center group hover:bg-white/5 transition-colors">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-cyan-400">{chat.user}</span>
+                      <span className="text-xs text-gray-500">{new Date(chat.time).toLocaleString()}</span>
+                      {chat.type === 'invite' && <span className="px-2 py-0.5 bg-pink-500/20 text-pink-400 rounded text-xs border border-pink-500/30">邀請訊息</span>}
+                    </div>
+                    <div className="text-gray-200">{chat.message}</div>
+                  </div>
+                  <button 
+                    onClick={() => handleDeleteChat(chat._id)}
+                    className="ml-4 px-3 py-1 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg border border-red-600/30 text-sm font-bold transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    刪除
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

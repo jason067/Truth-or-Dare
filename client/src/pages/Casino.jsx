@@ -119,6 +119,29 @@ export default function Casino() {
     }
   };
 
+  const handleSendLobbyInvite = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/lobby/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user?.googleId || user?.id,
+          user: nickname,
+          roomCode: myRoomCode,
+          gameType: 'casino'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('邀請已發送至大廳！');
+      } else {
+        alert(`發送失敗：${data.error}`);
+      }
+    } catch (e) {
+      alert('發送失敗，請稍後再試。');
+    }
+  };
+
   if (!isJoined) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6 relative bg-gradient-to-br from-yellow-900 to-black overflow-hidden">
@@ -301,6 +324,12 @@ export default function Casino() {
                     onClick={() => setShowQrModal(true)}
                   >
                     📱 顯示邀請 QR Code
+                  </button>
+                  <button 
+                    className="px-8 py-3 rounded-full bg-pink-500/20 border border-pink-500/40 text-pink-200 font-bold text-lg hover:bg-pink-500/40 transition-all w-full flex items-center justify-center gap-2 mt-2"
+                    onClick={handleSendLobbyInvite}
+                  >
+                    📢 發送邀請至大廳
                   </button>
                 </div>
               ) : (
