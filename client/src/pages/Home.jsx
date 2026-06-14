@@ -91,6 +91,14 @@ export default function Home() {
       }
     });
 
+    // 如果使用者被解封
+    newSocket.on('userUnbanned', (unbannedUserId) => {
+      if (user && (user.id === unbannedUserId || user.googleId === unbannedUserId)) {
+        alert('您的帳號已解除停權，功能已恢復！');
+        loginUser({ ...user, isBanned: false, banUntil: null, banReason: '' });
+      }
+    });
+
     // 載入歷史聊天紀錄
     const fetchChatHistory = async () => {
       try {

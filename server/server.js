@@ -215,11 +215,13 @@ app.post('/api/admin/users/:userId/action', async (req, res) => {
       
       const mail = db.createMailInstance({
         userId: user.googleId,
-        title: '帳號解封通知',
-        content: `親愛的玩家您好，您的帳號已解除封鎖。歡迎回來！`,
+        title: '帳號已恢復權限',
+        content: `親愛的玩家您好，您的帳號已解除停權。歡迎回來！`,
         type: 'system'
       });
       await mail.save();
+      
+      io.emit('userUnbanned', user.googleId); // 通知前端解鎖
     }
 
     await user.save();
@@ -318,11 +320,13 @@ app.post('/api/admin/appeals/:appealId/action', async (req, res) => {
         
         const mail = db.createMailInstance({
           userId: user.googleId,
-          title: '申訴結果：核准',
+          title: '申訴結果：已通過',
           content: '您的申訴已經通過審核，帳號已解鎖！',
           type: 'system'
         });
         await mail.save();
+        
+        io.emit('userUnbanned', user.googleId); // 通知前端解鎖
       }
     } else {
       const mail = db.createMailInstance({
