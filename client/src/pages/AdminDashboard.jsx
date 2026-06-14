@@ -549,7 +549,100 @@ export default function AdminDashboard() {
             </button>
           </div>
         )}
+        {activeTab === 'appeals' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">申訴審核列表</h3>
+              <button onClick={fetchAppeals} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-bold transition-colors">🔄 重新整理</button>
+            </div>
+            <div className="space-y-4 max-w-4xl">
+              {appeals.length === 0 ? (
+                <div className="p-8 text-center text-gray-500 bg-black/20 rounded-xl border border-white/5 font-bold">目前沒有任何申訴案件</div>
+              ) : appeals.map(appeal => (
+                <div key={appeal._id} className="bg-black/40 border border-white/10 p-5 rounded-xl">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-cyan-400 text-lg">{appeal.userName}</span>
+                      <span className="text-xs text-gray-500">{new Date(appeal.createdAt).toLocaleString()}</span>
+                      {appeal.status === 'pending' && <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs border border-yellow-500/30">待處理</span>}
+                      {appeal.status === 'approved' && <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs border border-green-500/30">已核准解封</span>}
+                      {appeal.status === 'rejected' && <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs border border-red-500/30">已駁回</span>}
+                    </div>
+                  </div>
+                  <div className="bg-white/5 p-4 rounded-lg text-gray-200 text-sm whitespace-pre-wrap mb-4">
+                    {appeal.reason}
+                  </div>
+                  {appeal.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleAppealAction(appeal._id, 'approve')}
+                        className="px-4 py-2 bg-green-500/20 hover:bg-green-500/40 text-green-400 rounded-lg border border-green-500/30 text-sm font-bold transition-colors"
+                      >
+                        ✅ 核准解封
+                      </button>
+                      <button 
+                        onClick={() => handleAppealAction(appeal._id, 'reject')}
+                        className="px-4 py-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg border border-red-500/30 text-sm font-bold transition-colors"
+                      >
+                        ❌ 駁回申訴
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* 封鎖管理彈窗 */}
+      {banModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111] border border-red-500/30 p-6 rounded-3xl w-full max-w-md shadow-2xl">
+            <h3 className="text-2xl font-black text-red-400 mb-4 flex items-center gap-2">
+              <span>🚫</span> 停權處分設定
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-gray-400 mb-2 font-bold text-sm">停權天數</label>
+                <select 
+                  value={banDays} 
+                  onChange={e => setBanDays(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-red-500"
+                >
+                  <option value="1">1 天</option>
+                  <option value="3">3 天</option>
+                  <option value="7">7 天</option>
+                  <option value="permanent">永久封鎖</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-gray-400 mb-2 font-bold text-sm">處分理由 (將顯示在通知信與攔截畫面)</label>
+                <textarea 
+                  value={banReason} 
+                  onChange={e => setBanReason(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-red-500 min-h-[100px] resize-none"
+                  placeholder="例如：嚴重違反社群發言規範..."
+                ></textarea>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button 
+                  onClick={() => setBanModalOpen(false)}
+                  className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-colors"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={submitBan}
+                  className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-500/20"
+                >
+                  執行封鎖
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
