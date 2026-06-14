@@ -12,10 +12,15 @@ export default function AdminDashboard() {
     const fetchUsers = async () => {
       try {
         const response = await fetch(`${BACKEND_URL}/api/admin/users`);
+        if (!response.ok) {
+          throw new Error(`Server responded with ${response.status}`);
+        }
         const data = await response.json();
-        setUsers(data);
+        // 確保 data 是陣列，防止伺服器回傳錯誤物件導致 map crash
+        setUsers(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("無法獲取用戶名單", error);
+        setUsers([]); // 發生錯誤時清空名單避免崩潰
       } finally {
         setLoading(false);
       }

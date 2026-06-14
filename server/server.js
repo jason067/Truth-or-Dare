@@ -52,15 +52,10 @@ app.get('/api/admin/users', async (req, res) => {
   try {
     let users = [];
     if (typeof User.find === 'function') {
-      users = await User.find();
-      // 如果支援 sort (mongoose) 則使用，否則我們在前端排序或這裡用原生 JS 排序
-      if (users.sort && typeof users[0]?.save === 'function') { // Check if it's an array or a mongoose Query
-          // For mongoose
-          users = await User.find().sort({ lastLoginAt: -1 });
-      } else {
-          // For memory db array
-          users.sort((a, b) => new Date(b.lastLoginAt) - new Date(a.lastLoginAt));
-      }
+      const result = await User.find();
+      // 不管是 Mongoose 還是 Mock DB，都在記憶體裡手動排序
+      users = Array.isArray(result) ? [...result] : result;
+      users.sort((a, b) => new Date(b.lastLoginAt) - new Date(a.lastLoginAt));
     }
     res.json(users);
   } catch (error) {
