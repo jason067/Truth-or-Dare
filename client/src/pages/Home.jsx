@@ -86,9 +86,8 @@ export default function Home() {
     // 如果使用者被封鎖
     newSocket.on('userBanned', (bannedUserId) => {
       if (user && (user.id === bannedUserId || user.googleId === bannedUserId)) {
-        alert('您已被管理員封鎖，將被強制登出。');
-        logoutUser();
-        setIsUnlocked(false);
+        alert('您的帳號剛剛被管理員停權，功能已鎖定。請查看收件箱。');
+        loginUser({ ...user, isBanned: true });
       }
     });
 
@@ -133,27 +132,18 @@ export default function Home() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: decoded.sub,
-            name: decoded.name,
-            email: decoded.email,
-            picture: decoded.picture
+            token: credentialResponse.credential, // 送出 token
+            profile: {
+              sub: decoded.sub,
+              name: decoded.name,
+              email: decoded.email,
+              picture: decoded.picture
+            }
           })
         });
         const data = await res.json();
-        if (data.isBanned) {
-          setBannedInfo({
-            userId: decoded.sub,
-            userName: decoded.name,
-            reason: data.banReason,
-            until: data.banUntil
-          });
-        } else {
-          loginUser({
-            name: decoded.name,
-            email: decoded.email,
-            picture: decoded.picture,
-            id: decoded.sub
-          });
+        if (data.success) {
+          loginUser(data.user);
         }
       } catch (err) {}
     } catch (err) {}
@@ -292,83 +282,7 @@ export default function Home() {
   }
 
   // ==========================================
-  // 封鎖攔截畫面 (Banned Intercept)
-  // ==========================================
-  if (isUnlocked && bannedInfo) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-black text-white p-4">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-600/20 rounded-full blur-[100px]"></div>
-        
-        <div className="relative z-10 glass-panel p-8 md:p-12 rounded-3xl border border-red-500/30 shadow-2xl max-w-lg w-full text-center">
-          <div className="text-6xl mb-6">🚫</div>
-          <h2 className="text-3xl font-black mb-4 text-red-500">帳號已遭到停權</h2>
-          
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 mb-8 text-left space-y-4">
-            <div>
-              <span className="text-gray-400 text-sm font-bold block mb-1">停權原因</span>
-              <p className="text-white font-bold">{bannedInfo.reason || '違反社群規範'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400 text-sm font-bold block mb-1">解除停權時間</span>
-              <p className="text-white font-bold">{bannedInfo.until ? new Date(bannedInfo.until).toLocaleString() : '永久停權'}</p>
-            </div>
-          </div>
-
-          {!appealSent ? (
-            <div className="text-left">
-              <h3 className="text-xl font-bold mb-3 text-cyan-400">我要申訴</h3>
-              <textarea 
-                value={appealReason}
-                onChange={(e) => setAppealReason(e.target.value)}
-                placeholder="請詳細說明您認為不該被停權的理由..."
-                className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white focus:outline-none focus:border-cyan-500 min-h-[120px] resize-none mb-4"
-              ></textarea>
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => { setBannedInfo(null); setAppealReason(''); }}
-                  className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-colors"
-                >
-                  返回
-                </button>
-                <button 
-                  onClick={async () => {
-                    if (!appealReason.trim()) return alert('請填寫申訴理由！');
-                    try {
-                      await fetch(`${BACKEND_URL}/api/appeal`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId: bannedInfo.userId, userName: bannedInfo.userName, reason: appealReason })
-                      });
-                      setAppealSent(true);
-                    } catch (e) {
-                      alert('送出失敗，請稍後再試。');
-                    }
-                  }}
-                  className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-cyan-500/20"
-                >
-                  送出申訴
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div className="text-green-400 text-xl font-bold mb-4">✅ 申訴已送出</div>
-              <p className="text-gray-400 mb-8">管理員將盡快審核您的申訴，審核通過後即可恢復登入。</p>
-              <button 
-                onClick={() => { setBannedInfo(null); setAppealSent(false); setAppealReason(''); }}
-                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-colors"
-              >
-                回到首頁
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // ==========================================
-  // 解鎖後的主大廳 (Unlocked Lobby)
+  // 大廳畫面 (Lobby)
   // ==========================================
   return (
     <div className="min-h-screen flex flex-col xl:flex-row bg-black text-white p-4 gap-4 relative overflow-hidden">
@@ -390,6 +304,12 @@ export default function Home() {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+          {user?.isBanned && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex flex-col items-center justify-center">
+              <div className="text-4xl mb-2">🔒</div>
+              <p className="text-red-400 font-bold">功能已鎖定</p>
+            </div>
+          )}
           {chatMessages.length === 0 ? (
             <div className="text-center text-gray-500 text-sm mt-10 font-bold">目前還沒有人講話，來打個招呼吧！</div>
           ) : (
@@ -403,8 +323,9 @@ export default function Home() {
                   <div className="bg-black/40 border border-purple-500/30 p-3 rounded-xl mt-2">
                     <p className="text-purple-300 font-bold text-sm mb-2">{msg.message}</p>
                     <button 
-                      onClick={() => navigate(`/${msg.payload?.gameType}?join=${msg.payload?.roomCode}`)}
-                      className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold py-1.5 px-4 rounded-lg shadow-lg shadow-purple-500/20"
+                      onClick={() => !user?.isBanned && navigate(`/${msg.payload?.gameType}?join=${msg.payload?.roomCode}`)}
+                      className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold py-1.5 px-4 rounded-lg shadow-lg shadow-purple-500/20 disabled:opacity-50"
+                      disabled={user?.isBanned}
                     >
                       點擊加入 [{msg.payload?.roomCode}]
                     </button>
@@ -417,15 +338,16 @@ export default function Home() {
           )}
           <div ref={chatEndRef} />
         </div>
-        <form onSubmit={handleSendMessage} className="p-3 bg-black/40 border-t border-white/10 flex gap-2">
+        <form onSubmit={handleSendMessage} className="p-3 bg-black/40 border-t border-white/10 flex gap-2 relative">
           <input 
             type="text" 
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            placeholder="說點什麼..."
-            className="flex-1 bg-white/10 border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-cyan-500"
+            placeholder={user?.isBanned ? "無法發言..." : "說點什麼..."}
+            disabled={user?.isBanned}
+            className="flex-1 bg-white/10 border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-cyan-500 disabled:opacity-50"
           />
-          <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-xl font-bold transition-colors">
+          <button type="submit" disabled={user?.isBanned} className="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-xl font-bold transition-colors disabled:opacity-50 disabled:bg-gray-600">
             送出
           </button>
         </form>
@@ -459,19 +381,29 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative">
+          {user?.isBanned && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex flex-col items-center justify-center rounded-[2rem] border border-red-500/30">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-3xl font-black text-red-500 mb-2">帳號已遭到停權</h2>
+              <p className="text-gray-300 font-bold">請點擊上方「收件箱」查看詳情或申訴。</p>
+            </div>
+          )}
           {games.map(game => (
             <div 
               key={game.id}
-              onClick={() => game.active && navigate(`/${game.id}`)}
-              className="relative overflow-hidden rounded-[2rem] p-6 flex flex-col items-center text-center transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(168,85,247,0.3)] glass-panel border border-white/10 group"
+              onClick={() => {
+                if (user?.isBanned) return;
+                if (game.active) navigate(`/${game.id}`);
+              }}
+              className={`relative overflow-hidden rounded-[2rem] p-6 flex flex-col items-center text-center transition-all duration-300 glass-panel border border-white/10 group ${user?.isBanned ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(168,85,247,0.3)]'}`}
             >
               <div className={`absolute inset-0 bg-gradient-to-br ${game.color} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
               <div className="text-5xl mb-4 relative z-10 drop-shadow-lg transform group-hover:scale-110 transition-transform">{game.icon}</div>
               <h2 className="text-xl font-black text-white mb-2 relative z-10 tracking-wider">{game.title}</h2>
               <p className="text-gray-400 text-sm font-medium relative z-10">{game.description}</p>
-              <button className="mt-6 px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all w-full text-sm">
-                進入遊戲
+              <button disabled={user?.isBanned} className="mt-6 px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all w-full text-sm disabled:opacity-50">
+                {user?.isBanned ? '已鎖定' : '進入遊戲'}
               </button>
             </div>
           ))}
@@ -555,7 +487,7 @@ export default function Home() {
                   </div>
                   <p className="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed">{mail.content}</p>
                   
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {!mail.isRead && (
                       <button 
                         onClick={async () => {
@@ -588,6 +520,39 @@ export default function Home() {
                     )}
                     {mail.isClaimed && (
                       <span className="text-xs px-3 py-1 bg-white/5 text-gray-500 rounded-lg font-bold border border-white/10">已領取</span>
+                    )}
+                    {mail.type === 'ban_notice' && !appealSent && (
+                      <div className="w-full mt-2 bg-black/40 p-3 rounded-lg border border-red-500/20">
+                        <textarea 
+                          value={appealReason}
+                          onChange={(e) => setAppealReason(e.target.value)}
+                          placeholder="請說明您認為不該被停權的理由..."
+                          className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-red-500 min-h-[60px] resize-none mb-2"
+                        ></textarea>
+                        <button 
+                          onClick={async () => {
+                            if (!appealReason.trim()) return alert('請填寫申訴理由！');
+                            try {
+                              await fetch(`${BACKEND_URL}/api/appeal`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: user.googleId || user.id, userName: user.name, reason: appealReason })
+                              });
+                              setAppealSent(true);
+                            } catch (e) {
+                              alert('送出失敗，請稍後再試。');
+                            }
+                          }}
+                          className="w-full text-xs py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-bold"
+                        >
+                          送出申訴
+                        </button>
+                      </div>
+                    )}
+                    {mail.type === 'ban_notice' && appealSent && (
+                      <div className="w-full mt-2 text-center text-green-400 font-bold text-sm bg-black/40 p-2 rounded-lg">
+                        ✅ 申訴已送出，請等待管理員審核。
+                      </div>
                     )}
                   </div>
                 </div>

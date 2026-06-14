@@ -18,15 +18,39 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date() });
 });
 
-// Google 登入紀錄 API
+// Google 登入 API
 app.post('/api/auth/google', async (req, res) => {
   try {
-    const { id, name, email, picture } = req.body;
-    if (!id || !name || !email) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    const { token } = req.body;
+    let payload;
+    
+    // 如果是測試 token
+    if (token && typeof token === 'string' && token.startsWith('test_token_')) {
+      const parts = token.split('_');
+      payload = {
+        sub: parts[2] || 'test_user',
+        name: parts[3] || 'TestUser',
+        email: 'test@example.com',
+        picture: `https://api.dicebear.com/7.x/bottts/svg?seed=${parts[2]}`
+      };
+    } else {
+      // 真實 Google 驗證 (需替換為您的 CLIENT_ID)
+      // const ticket = await client.verifyIdToken({ idToken: token, audience: 'YOUR_CLIENT_ID' });
+      // payload = ticket.getPayload();
+      
+      // 開發環境暫時模擬解析 (假定前端已傳入正確資訊)
+      payload = req.body.profile || {
+        sub: 'google_' + Date.now(),
+        name: 'Google User',
+        email: 'google@example.com',
+        picture: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + Date.now()
+      };
     }
 
-    let user = await User.findOne({ googleId: id });
+    const { sub: id, name, email, picture } = payload;
+    let users = await db.User.find();
+    let user = users.find(u => u.googleId === id);
+
     if (user) {
       if (user.isBanned) {
         if (user.banUntil && new Date() > new Date(user.banUntil)) {
@@ -47,7 +71,7 @@ app.post('/api/auth/google', async (req, res) => {
       user.picture = picture;
       await user.save();
     } else {
-      user = createUserInstance({
+      user = db.createUserInstance({
         googleId: id,
         name,
         email,
@@ -66,9 +90,11 @@ app.post('/api/auth/google', async (req, res) => {
 app.post('/api/auth/guest', async (req, res) => {
   try {
     const { name, guestId } = req.body;
-    if (!name || !guestId) return res.status(400).json({ error: 'Missing fields' });
+    if (!name || !guestId) return res.status(400).json({ error: 'Missing parameters' });
 
-    let user = await db.User.findOne({ googleId: guestId });
+    let users = await db.User.find();
+    let user = users.find(u => u.googleId === guestId);
+
     if (user) {
       if (user.isBanned) {
         if (user.banUntil && new Date() > new Date(user.banUntil)) {
