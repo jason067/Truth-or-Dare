@@ -24,10 +24,37 @@ export default function Home() {
   const [lobbyStatus, setLobbyStatus] = useState({ activeRoomsCount: 0, activePlayersCount: 0, leaderboard: [] });
   const chatEndRef = useRef(null);
 
+  // 封鎖攔截狀態
+  const [bannedInfo, setBannedInfo] = useState(null);
+  const [appealReason, setAppealReason] = useState('');
+  const [appealSent, setAppealSent] = useState(false);
+
+  // 信箱狀態
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [mails, setMails] = useState([]);
+
   // 自動滾動聊天室
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  const fetchMails = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/mail/${user.googleId || user.id}`);
+      if (res.ok) {
+        setMails(await res.json());
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    if (user && isUnlocked && !bannedInfo) {
+      fetchMails();
+      const interval = setInterval(fetchMails, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [user, isUnlocked, bannedInfo]);
 
   useEffect(() => {
     if (!isUnlocked) return;
@@ -100,15 +127,9 @@ export default function Home() {
   const handleLoginSuccess = async (credentialResponse) => {
     try {
       const decoded = jwtDecode(credentialResponse.credential);
-      loginUser({
-        name: decoded.name,
-        email: decoded.email,
-        picture: decoded.picture,
-        id: decoded.sub
-      });
-
+      
       try {
-        await fetch(`${BACKEND_URL}/api/auth/google`, {
+        const res = await fetch(`${BACKEND_URL}/api/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -118,6 +139,22 @@ export default function Home() {
             picture: decoded.picture
           })
         });
+        const data = await res.json();
+        if (data.isBanned) {
+          setBannedInfo({
+            userId: decoded.sub,
+            userName: decoded.name,
+            reason: data.banReason,
+            until: data.banUntil
+          });
+        } else {
+          loginUser({
+            name: decoded.name,
+            email: decoded.email,
+            picture: decoded.picture,
+            id: decoded.sub
+          });
+        }
       } catch (err) {}
     } catch (err) {}
   };
@@ -193,7 +230,7 @@ export default function Home() {
   // ==========================================
   // 身分選擇畫面 (Login or Guest)
   // ==========================================
-  if (isUnlocked && !user) {
+  if (isUnlocked && !user && !bannedInfo) {
     return (
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-black text-white">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[100px]"></div>
@@ -219,7 +256,19 @@ export default function Home() {
             e.preventDefault();
             if (!guestName.trim()) return alert('請輸入暱稱！');
             const res = await loginGuest(guestName);
-            if (!res.success) alert(res.error);
+            if (!res.success) {
+              if (res.isBanned) {
+                const guestId = localStorage.getItem('partyhub_guest_id');
+                setBannedInfo({
+                  userId: guestId,
+                  userName: guestName,
+                  reason: res.banReason,
+                  until: res.banUntil
+                });
+              } else {
+                alert(res.error);
+              }
+            }
           }}>
             <p className="text-gray-400 text-xs font-bold mb-4">以訪客身分快速遊玩</p>
             <input 
@@ -237,6 +286,82 @@ export default function Home() {
               訪客進入大廳
             </button>
           </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 封鎖攔截畫面 (Banned Intercept)
+  // ==========================================
+  if (isUnlocked && bannedInfo) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-black text-white p-4">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-600/20 rounded-full blur-[100px]"></div>
+        
+        <div className="relative z-10 glass-panel p-8 md:p-12 rounded-3xl border border-red-500/30 shadow-2xl max-w-lg w-full text-center">
+          <div className="text-6xl mb-6">🚫</div>
+          <h2 className="text-3xl font-black mb-4 text-red-500">帳號已遭到停權</h2>
+          
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 mb-8 text-left space-y-4">
+            <div>
+              <span className="text-gray-400 text-sm font-bold block mb-1">停權原因</span>
+              <p className="text-white font-bold">{bannedInfo.reason || '違反社群規範'}</p>
+            </div>
+            <div>
+              <span className="text-gray-400 text-sm font-bold block mb-1">解除停權時間</span>
+              <p className="text-white font-bold">{bannedInfo.until ? new Date(bannedInfo.until).toLocaleString() : '永久停權'}</p>
+            </div>
+          </div>
+
+          {!appealSent ? (
+            <div className="text-left">
+              <h3 className="text-xl font-bold mb-3 text-cyan-400">我要申訴</h3>
+              <textarea 
+                value={appealReason}
+                onChange={(e) => setAppealReason(e.target.value)}
+                placeholder="請詳細說明您認為不該被停權的理由..."
+                className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white focus:outline-none focus:border-cyan-500 min-h-[120px] resize-none mb-4"
+              ></textarea>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => { setBannedInfo(null); setAppealReason(''); }}
+                  className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-colors"
+                >
+                  返回
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (!appealReason.trim()) return alert('請填寫申訴理由！');
+                    try {
+                      await fetch(`${BACKEND_URL}/api/appeal`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: bannedInfo.userId, userName: bannedInfo.userName, reason: appealReason })
+                      });
+                      setAppealSent(true);
+                    } catch (e) {
+                      alert('送出失敗，請稍後再試。');
+                    }
+                  }}
+                  className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-cyan-500/20"
+                >
+                  送出申訴
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="text-green-400 text-xl font-bold mb-4">✅ 申訴已送出</div>
+              <p className="text-gray-400 mb-8">管理員將盡快審核您的申訴，審核通過後即可恢復登入。</p>
+              <button 
+                onClick={() => { setBannedInfo(null); setAppealSent(false); setAppealReason(''); }}
+                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-colors"
+              >
+                回到首頁
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -317,7 +442,16 @@ export default function Home() {
           <div>
             <div className="flex items-center gap-3">
               <span className="text-gray-300 font-bold text-sm hidden md:inline">{user.name}</span>
-              <img src={user.picture} alt="Avatar" className="w-10 h-10 rounded-full border-2 border-cyan-500" />
+              <img src={user.picture || `https://ui-avatars.com/api/?name=${user.name}`} alt="Avatar" className="w-10 h-10 rounded-full border-2 border-cyan-500" />
+              <button 
+                onClick={() => setInboxOpen(true)}
+                className="relative text-xs bg-cyan-500/20 text-cyan-300 px-3 py-1.5 rounded-full hover:bg-cyan-500 hover:text-black transition-colors border border-cyan-500/30 font-bold"
+              >
+                收件箱
+                {mails.some(m => !m.isRead) && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse"></span>
+                )}
+              </button>
               <button onClick={logoutUser} className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-full hover:bg-red-500 hover:text-white transition-colors border border-red-500/30 font-bold">
                 登出
               </button>
@@ -397,6 +531,71 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* 信箱彈窗 */}
+      {inboxOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111] border border-cyan-500/30 p-6 rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-black text-cyan-400 flex items-center gap-2">
+                <span>📬</span> 系統收件箱
+              </h3>
+              <button onClick={() => setInboxOpen(false)} className="text-gray-400 hover:text-white font-bold text-xl">×</button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
+              {mails.length === 0 ? (
+                <div className="text-center text-gray-500 font-bold mt-10">收件箱是空的。</div>
+              ) : mails.map(mail => (
+                <div key={mail._id} className={`p-4 rounded-xl border ${mail.isRead ? 'bg-white/5 border-white/10 opacity-70' : 'bg-cyan-500/10 border-cyan-500/30'} relative`}>
+                  {!mail.isRead && <span className="absolute top-4 right-4 w-2 h-2 bg-red-500 rounded-full"></span>}
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className={`font-bold ${mail.isRead ? 'text-gray-300' : 'text-cyan-300'}`}>{mail.title}</h4>
+                    <span className="text-xs text-gray-500">{new Date(mail.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed">{mail.content}</p>
+                  
+                  <div className="mt-3 flex gap-2">
+                    {!mail.isRead && (
+                      <button 
+                        onClick={async () => {
+                          try {
+                            await fetch(`${BACKEND_URL}/api/mail/${mail._id}/read`, { method: 'POST' });
+                            fetchMails();
+                          } catch (e) {}
+                        }}
+                        className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-bold"
+                      >
+                        標示為已讀
+                      </button>
+                    )}
+                    {mail.rewardCoins > 0 && !mail.isClaimed && (
+                      <button 
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`${BACKEND_URL}/api/mail/${mail._id}/claim`, { method: 'POST' });
+                            if (res.ok) {
+                              const data = await res.json();
+                              alert(`成功領取 ${data.coins} 金幣！此金幣請於遊戲內向房主兌現。`);
+                              fetchMails();
+                            }
+                          } catch (e) {}
+                        }}
+                        className="text-xs px-3 py-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/40 rounded-lg transition-colors font-bold"
+                      >
+                        領取 {mail.rewardCoins} 金幣
+                      </button>
+                    )}
+                    {mail.isClaimed && (
+                      <span className="text-xs px-3 py-1 bg-white/5 text-gray-500 rounded-lg font-bold border border-white/10">已領取</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       
     </div>
   );

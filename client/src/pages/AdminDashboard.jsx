@@ -13,8 +13,14 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [chats, setChats] = useState([]);
+  const [appeals, setAppeals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [broadcastMsg, setBroadcastMsg] = useState('');
+
+  const [banModalOpen, setBanModalOpen] = useState(false);
+  const [banTarget, setBanTarget] = useState(null);
+  const [banDays, setBanDays] = useState('1');
+  const [banReason, setBanReason] = useState('違反社群規範');
   const navigate = useNavigate();
 
   const fetchUsers = async () => {
@@ -62,11 +68,27 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchAppeals = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/admin/appeals`);
+      if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+      const data = await response.json();
+      setAppeals(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("無法獲取申訴紀錄", error);
+      setAppeals([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isAuthenticated) return;
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'rooms') fetchRooms();
     if (activeTab === 'chats') fetchChats();
+    if (activeTab === 'appeals') fetchAppeals();
   }, [isAuthenticated, activeTab]);
 
   const handleLogin = (e) => {
@@ -133,12 +155,46 @@ export default function AdminDashboard() {
   };
 
   const handleUserAction = async (userId, action) => {
+    if (action === 'ban') {
+      setBanTarget(userId);
+      setBanModalOpen(true);
+      return;
+    }
     try {
       await fetch(`${BACKEND_URL}/api/admin/users/${userId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })
       });
+      fetchUsers();
+    } catch (err) {
+      alert('操作失敗！');
+    }
+  };
+
+  const submitBan = async () => {
+    if (!banTarget) return;
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/users/${banTarget}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ban', banDays, reason: banReason })
+      });
+      setBanModalOpen(false);
+      fetchUsers();
+    } catch (err) {
+      alert('封鎖失敗！');
+    }
+  };
+
+  const handleAppealAction = async (appealId, action) => {
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/appeals/${appealId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+      fetchAppeals();
       fetchUsers();
     } catch (err) {
       alert('操作失敗！');
@@ -259,6 +315,12 @@ export default function AdminDashboard() {
           🎮 房間管理
         </button>
         <button 
+          onClick={() => setActiveTab('appeals')}
+          className={`px-4 py-3 rounded-xl font-bold transition-all text-left ${activeTab === 'appeals' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/30' : 'bg-white/5 hover:bg-white/10'}`}
+        >
+          📄 申訴審核
+        </button>
+        <button 
           onClick={() => setActiveTab('chats')}
           className={`px-4 py-3 rounded-xl font-bold transition-all text-left ${activeTab === 'chats' ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/30' : 'bg-white/5 hover:bg-white/10'}`}
         >
@@ -329,7 +391,11 @@ export default function AdminDashboard() {
                             <div className="font-bold text-white flex items-center gap-2">
                               {u.name || 'Unknown User'}
                               {u.isMuted && <span className="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-md border border-yellow-500/30">禁言中</span>}
-                              {u.isBanned && <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-400 rounded-md border border-red-500/30">已封鎖</span>}
+                              {u.isBanned && (
+                                <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-400 rounded-md border border-red-500/30">
+                                  {u.banUntil ? `封鎖至 ${new Date(u.banUntil).toLocaleDateString()}` : '永久封鎖'}
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-gray-500 md:hidden">{u.email || 'No Email'}</div>
                           </div>

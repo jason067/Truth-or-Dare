@@ -44,7 +44,13 @@ export function AuthProvider({ children }) {
         loginUser(data.user);
         return { success: true };
       } else {
-        return { success: false, error: data.error };
+        return { 
+          success: false, 
+          error: data.error,
+          isBanned: data.isBanned,
+          banUntil: data.banUntil,
+          banReason: data.banReason
+        };
       }
     } catch (e) {
       return { success: false, error: 'Network error' };

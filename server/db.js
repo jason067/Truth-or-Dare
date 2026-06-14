@@ -9,7 +9,28 @@ const UserSchema = new Schema({
   picture: { type: String },
   isMuted: { type: Boolean, default: false },
   isBanned: { type: Boolean, default: false },
+  banUntil: { type: Date, default: null },
+  banReason: { type: String, default: '' },
   lastLoginAt: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const MailSchema = new Schema({
+  userId: { type: String, required: true },
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  type: { type: String, default: 'system' }, // 'system', 'reward', 'ban_notice'
+  rewardCoins: { type: Number, default: 0 },
+  isRead: { type: Boolean, default: false },
+  isClaimed: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const AppealSchema = new Schema({
+  userId: { type: String, required: true },
+  userName: { type: String, required: true },
+  reason: { type: String, required: true },
+  status: { type: String, default: 'pending' }, // 'pending', 'approved', 'rejected'
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -62,6 +83,8 @@ const memoryDb = {
   rounds: [],
   users: [],
   chats: [],
+  mails: [],
+  appeals: [],
   
   createId() {
     return new mongoose.Types.ObjectId().toString();
@@ -122,6 +145,8 @@ class InMemoryUser {
     this.picture = data.picture;
     this.isMuted = data.isMuted || false;
     this.isBanned = data.isBanned || false;
+    this.banUntil = data.banUntil || null;
+    this.banReason = data.banReason || '';
     this.lastLoginAt = data.lastLoginAt || new Date();
     this.createdAt = new Date();
   }
@@ -150,6 +175,45 @@ class InMemoryChat {
   async save() {
     memoryDb.chats.push(this);
     if (memoryDb.chats.length > 200) memoryDb.chats.shift();
+    return this;
+  }
+}
+
+class InMemoryMail {
+  constructor(data) {
+    this._id = memoryDb.createId();
+    this.userId = data.userId;
+    this.title = data.title;
+    this.content = data.content;
+    this.type = data.type || 'system';
+    this.rewardCoins = data.rewardCoins || 0;
+    this.isRead = data.isRead || false;
+    this.isClaimed = data.isClaimed || false;
+    this.createdAt = new Date();
+  }
+
+  async save() {
+    const idx = memoryDb.mails.findIndex(m => m._id === this._id);
+    if (idx !== -1) memoryDb.mails[idx] = this;
+    else memoryDb.mails.push(this);
+    return this;
+  }
+}
+
+class InMemoryAppeal {
+  constructor(data) {
+    this._id = memoryDb.createId();
+    this.userId = data.userId;
+    this.userName = data.userName;
+    this.reason = data.reason;
+    this.status = data.status || 'pending';
+    this.createdAt = new Date();
+  }
+
+  async save() {
+    const idx = memoryDb.appeals.findIndex(a => a._id === this._id);
+    if (idx !== -1) memoryDb.appeals[idx] = this;
+    else memoryDb.appeals.push(this);
     return this;
   }
 }
@@ -250,11 +314,35 @@ const MockChatAPI = {
   }
 };
 
+const MockMailAPI = {
+  async find(query = {}) {
+    let result = memoryDb.mails;
+    if (query.userId) result = result.filter(m => m.userId === query.userId);
+    return result.map(m => Object.assign(Object.create(InMemoryMail.prototype), m));
+  },
+  async findById(id) {
+    const found = memoryDb.mails.find(m => m._id === id);
+    return found ? Object.assign(Object.create(InMemoryMail.prototype), found) : null;
+  }
+};
+
+const MockAppealAPI = {
+  async find(query = {}) {
+    return memoryDb.appeals.map(a => Object.assign(Object.create(InMemoryAppeal.prototype), a));
+  },
+  async findById(id) {
+    const found = memoryDb.appeals.find(a => a._id === id);
+    return found ? Object.assign(Object.create(InMemoryAppeal.prototype), found) : null;
+  }
+};
+
 // 預設直接開啟 In-Memory Mock，防止異步連線過程中 Room 為 undefined
 let RoomModel = MockRoomAPI;
 let RoundModel = MockRoundAPI;
 let UserModel = MockUserAPI;
 let ChatModel = MockChatAPI;
+let MailModel = MockMailAPI;
+let AppealModel = MockAppealAPI;
 let isInMemory = true;
 
 // 3. 連線資料庫並決定使用何種模型
@@ -269,6 +357,8 @@ mongoose.connect(mongoUri, {
   RoundModel = mongoose.model('Round', RoundSchema);
   UserModel = mongoose.model('User', UserSchema);
   ChatModel = mongoose.model('Chat', ChatSchema);
+  MailModel = mongoose.model('Mail', MailSchema);
+  AppealModel = mongoose.model('Appeal', AppealSchema);
   isInMemory = false;
 })
 .catch((err) => {
@@ -313,6 +403,24 @@ function createChatInstance(data) {
   }
 }
 
+function createMailInstance(data) {
+  if (isInMemory) {
+    return new InMemoryMail(data);
+  } else {
+    const MongooseMail = mongoose.model('Mail');
+    return new MongooseMail(data);
+  }
+}
+
+function createAppealInstance(data) {
+  if (isInMemory) {
+    return new InMemoryAppeal(data);
+  } else {
+    const MongooseAppeal = mongoose.model('Appeal');
+    return new MongooseAppeal(data);
+  }
+}
+
 const RoomProxy = new Proxy({}, {
   get(target, prop) {
     if (typeof RoomModel[prop] === 'function') return RoomModel[prop].bind(RoomModel);
@@ -341,16 +449,34 @@ const ChatProxy = new Proxy({}, {
   }
 });
 
+const MailProxy = new Proxy({}, {
+  get(target, prop) {
+    if (typeof MailModel[prop] === 'function') return MailModel[prop].bind(MailModel);
+    return MailModel[prop];
+  }
+});
+
+const AppealProxy = new Proxy({}, {
+  get(target, prop) {
+    if (typeof AppealModel[prop] === 'function') return AppealModel[prop].bind(AppealModel);
+    return AppealModel[prop];
+  }
+});
+
 // 導出模組
 module.exports = {
   Room: RoomProxy,
   Round: RoundProxy,
   User: UserProxy,
   Chat: ChatProxy,
+  Mail: MailProxy,
+  Appeal: AppealProxy,
   createRoomInstance,
   createRoundInstance,
   createUserInstance,
   createChatInstance,
+  createMailInstance,
+  createAppealInstance,
   getIsInMemory: () => isInMemory,
   createId: () => isInMemory ? MockRoomAPI.createId() : new mongoose.Types.ObjectId().toString()
 };

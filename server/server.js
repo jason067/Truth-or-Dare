@@ -7,7 +7,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const db = require('./db');
-const { Room, Round, User, Chat, createRoomInstance, createRoundInstance, createUserInstance, createChatInstance, createId, getIsInMemory } = db;
+const { Room, Round, User, Chat, Mail, Appeal, createRoomInstance, createRoundInstance, createUserInstance, createChatInstance, createMailInstance, createAppealInstance, createId, getIsInMemory } = db;
 
 const app = express();
 app.use(cors());
@@ -28,6 +28,20 @@ app.post('/api/auth/google', async (req, res) => {
 
     let user = await User.findOne({ googleId: id });
     if (user) {
+      if (user.isBanned) {
+        if (user.banUntil && new Date() > new Date(user.banUntil)) {
+          user.isBanned = false;
+          user.banUntil = null;
+          user.banReason = '';
+        } else {
+          return res.status(403).json({ 
+            error: '此帳號已被封鎖', 
+            isBanned: true, 
+            banUntil: user.banUntil, 
+            banReason: user.banReason 
+          });
+        }
+      }
       user.lastLoginAt = new Date();
       user.name = name;
       user.picture = picture;
@@ -56,7 +70,20 @@ app.post('/api/auth/guest', async (req, res) => {
 
     let user = await db.User.findOne({ googleId: guestId });
     if (user) {
-      if (user.isBanned) return res.status(403).json({ error: '此帳號已被封鎖' });
+      if (user.isBanned) {
+        if (user.banUntil && new Date() > new Date(user.banUntil)) {
+          user.isBanned = false;
+          user.banUntil = null;
+          user.banReason = '';
+        } else {
+          return res.status(403).json({ 
+            error: '此帳號已被封鎖', 
+            isBanned: true, 
+            banUntil: user.banUntil, 
+            banReason: user.banReason 
+          });
+        }
+      }
       user.lastLoginAt = new Date();
       user.name = name;
       await user.save();
@@ -124,9 +151,8 @@ app.delete('/api/admin/users/:userId', async (req, res) => {
 app.post('/api/admin/users/:userId/action', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { action } = req.body; // 'mute', 'unmute', 'ban', 'unban'
+    const { action, banDays, reason } = req.body; 
     
-    // 注意：MongoDB 的 _id 查詢要麼直接傳 string，要麼傳 ObjectId。如果用 mockDB 則是 string。
     const users = await db.User.find();
     const user = users.find(u => u._id.toString() === userId);
     
@@ -136,9 +162,39 @@ app.post('/api/admin/users/:userId/action', async (req, res) => {
     if (action === 'unmute') user.isMuted = false;
     if (action === 'ban') {
       user.isBanned = true;
+      user.banReason = reason || '違反社群規範';
+      if (banDays && banDays !== 'permanent') {
+        const until = new Date();
+        until.setDate(until.getDate() + parseInt(banDays));
+        user.banUntil = until;
+      } else {
+        user.banUntil = null; // permanent
+      }
+      
+      // 寄送封鎖通知信
+      const mail = db.createMailInstance({
+        userId: user.googleId,
+        title: '停權通知',
+        content: `親愛的玩家您好，您的帳號因為「${user.banReason}」已被停權。停權時間至：${user.banUntil ? new Date(user.banUntil).toLocaleDateString() : '永久'}。如有異議請前往申訴。`,
+        type: 'ban_notice'
+      });
+      await mail.save();
+      
       io.emit('userBanned', user.googleId); // 主動踢出
     }
-    if (action === 'unban') user.isBanned = false;
+    if (action === 'unban') {
+      user.isBanned = false;
+      user.banUntil = null;
+      user.banReason = '';
+      
+      const mail = db.createMailInstance({
+        userId: user.googleId,
+        title: '帳號解封通知',
+        content: `親愛的玩家您好，您的帳號已解除封鎖。歡迎回來！`,
+        type: 'system'
+      });
+      await mail.save();
+    }
 
     await user.save();
     res.json({ success: true, user });
@@ -146,6 +202,118 @@ app.post('/api/admin/users/:userId/action', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+// ====================== 信件與申訴 API ======================
+app.get('/api/mail/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const mails = await db.Mail.find({ userId });
+    mails.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json(mails);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/mail/:mailId/read', async (req, res) => {
+  try {
+    const { mailId } = req.params;
+    let mails = await db.Mail.find();
+    let mail = mails.find(m => m._id.toString() === mailId);
+    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    mail.isRead = true;
+    if (typeof mail.save === 'function') await mail.save();
+    res.json({ success: true, mail });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/mail/:mailId/claim', async (req, res) => {
+  try {
+    const { mailId } = req.params;
+    let mails = await db.Mail.find();
+    let mail = mails.find(m => m._id.toString() === mailId);
+    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    if (mail.isClaimed || mail.rewardCoins <= 0) return res.status(400).json({ error: 'Cannot claim' });
+    
+    mail.isClaimed = true;
+    mail.isRead = true;
+    if (typeof mail.save === 'function') await mail.save();
+    
+    // 金幣給予邏輯會需要通知房間內的該玩家 (由前端通知)
+    res.json({ success: true, mail, coins: mail.rewardCoins });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/appeal', async (req, res) => {
+  try {
+    const { userId, userName, reason } = req.body;
+    if (!userId || !reason) return res.status(400).json({ error: 'Missing fields' });
+    const appeal = db.createAppealInstance({ userId, userName, reason });
+    await appeal.save();
+    res.json({ success: true, appeal });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/admin/appeals', async (req, res) => {
+  try {
+    const appeals = await db.Appeal.find();
+    appeals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json(appeals);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/admin/appeals/:appealId/action', async (req, res) => {
+  try {
+    const { appealId } = req.params;
+    const { action } = req.body; // 'approve', 'reject'
+    const appeals = await db.Appeal.find();
+    const appeal = appeals.find(a => a._id.toString() === appealId);
+    if (!appeal) return res.status(404).json({ error: 'Appeal not found' });
+    
+    appeal.status = action === 'approve' ? 'approved' : 'rejected';
+    if (typeof appeal.save === 'function') await appeal.save();
+    
+    if (action === 'approve') {
+      const users = await db.User.find();
+      const user = users.find(u => u.googleId === appeal.userId || u._id.toString() === appeal.userId);
+      if (user) {
+        user.isBanned = false;
+        user.banUntil = null;
+        user.banReason = '';
+        if (typeof user.save === 'function') await user.save();
+        
+        const mail = db.createMailInstance({
+          userId: user.googleId,
+          title: '申訴結果：核准',
+          content: '您的申訴已經通過審核，帳號已解鎖！',
+          type: 'system'
+        });
+        await mail.save();
+      }
+    } else {
+      const mail = db.createMailInstance({
+        userId: appeal.userId,
+        title: '申訴結果：駁回',
+        content: '很抱歉，您的申訴未通過審核，帳號繼續維持封鎖狀態。',
+        type: 'system'
+      });
+      await mail.save();
+    }
+    
+    res.json({ success: true, appeal });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+// ==========================================================
 
 // 獲取所有活躍房間 API
 app.get('/api/admin/rooms', async (req, res) => {
@@ -339,7 +507,17 @@ const checkBan = async (userId) => {
   if (!userId) return false;
   const users = await db.User.find();
   const dbUser = users.find(u => u.googleId === userId || u._id.toString() === userId);
-  return dbUser && dbUser.isBanned;
+  if (dbUser && dbUser.isBanned) {
+    if (dbUser.banUntil && new Date() > new Date(dbUser.banUntil)) {
+      dbUser.isBanned = false;
+      dbUser.banUntil = null;
+      dbUser.banReason = '';
+      if (typeof dbUser.save === 'function') await dbUser.save();
+      return false;
+    }
+    return true;
+  }
+  return false;
 };
 
 const server = http.createServer(app);
