@@ -6,7 +6,8 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const { Room, Round, User, Chat, createRoomInstance, createRoundInstance, createUserInstance, createChatInstance, createId, getIsInMemory } = require('./db');
+const db = require('./db');
+const { Room, Round, User, Chat, createRoomInstance, createRoundInstance, createUserInstance, createChatInstance, createId, getIsInMemory } = db;
 
 const app = express();
 app.use(cors());
