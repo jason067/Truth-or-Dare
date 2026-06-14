@@ -45,6 +45,8 @@ app.post('/api/auth/google', async (req, res) => {
     console.error("Auth API Error:", error);
     res.status(500).json({ error: 'Server error' });
   }
+});
+
 // 訪客登入 API
 app.post('/api/auth/guest', async (req, res) => {
   try {
@@ -277,11 +279,17 @@ app.get('/api/lobby/chat', async (req, res) => {
 // 管理員刪除大廳聊天紀錄
 app.delete('/api/admin/chat/:chatId', async (req, res) => {
   try {
-    await db.Chat.deleteOne({ _id: req.params.chatId });
+    const { chatId } = req.params;
+    if (typeof db.Chat.findByIdAndDelete === 'function') {
+      await db.Chat.findByIdAndDelete(chatId);
+    } else {
+      await db.Chat.deleteOne({ _id: chatId });
+    }
     // 通知所有人更新聊天
-    io.emit('chatDeleted', req.params.chatId);
+    io.emit('chatDeleted', chatId);
     res.json({ success: true });
   } catch (error) {
+    console.error("Delete Chat Error:", error);
     res.status(500).json({ error: 'Server error' });
   }
 });

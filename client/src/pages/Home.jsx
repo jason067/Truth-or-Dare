@@ -253,10 +253,16 @@ export default function Home() {
 
       {/* 左側：大廳聊天室 */}
       <div className="xl:w-1/4 h-[400px] xl:h-auto glass-panel rounded-3xl border border-white/10 flex flex-col relative z-10 overflow-hidden order-2 xl:order-1">
-        <div className="bg-white/5 p-4 border-b border-white/10">
+        <div className="bg-white/5 p-4 border-b border-white/10 flex justify-between items-center">
           <h3 className="font-black text-lg text-cyan-400 flex items-center gap-2">
             <span>💬</span> 全服大廳聊天室
           </h3>
+          <button 
+            onClick={() => document.getElementById('game-hub')?.scrollIntoView({ behavior: 'smooth' })}
+            className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-lg shadow-purple-500/20 animate-pulse"
+          >
+            🎲 揪團開房
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
           {chatMessages.length === 0 ? (
@@ -301,7 +307,7 @@ export default function Home() {
       </div>
 
       {/* 中間：遊戲列表與認證 */}
-      <div className="xl:w-2/4 flex flex-col relative z-10 order-1 xl:order-2 h-[85vh] xl:h-[calc(100vh-2rem)] overflow-y-auto custom-scrollbar pr-2">
+      <div id="game-hub" className="xl:w-2/4 flex flex-col relative z-10 order-1 xl:order-2 h-[85vh] xl:h-[calc(100vh-2rem)] overflow-y-auto custom-scrollbar pr-2">
         <div className="flex justify-between items-center mb-8 bg-white/5 p-4 rounded-3xl border border-white/10 backdrop-blur-md">
           <div className="text-center md:text-left md:ml-4">
             <h1 className="text-3xl md:text-4xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 glow-text">
