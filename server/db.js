@@ -12,7 +12,15 @@ const UserSchema = new Schema({
   banUntil: { type: Date, default: null },
   banReason: { type: String, default: '' },
   lastLoginAt: { type: Date, default: Date.now },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  // Buckshot Roulette Economy & Stats
+  coins: { type: Number, default: 0 },
+  inventory: { type: Array, default: [] }, // [{ itemId: 'case_basic', quantity: 1 }, { itemId: 'shotgun_skin_gold', trakStat: 0 }]
+  trakStat: { 
+    kills: { type: Number, default: 0 },
+    deaths: { type: Number, default: 0 },
+    wins: { type: Number, default: 0 }
+  }
 });
 
 const MailSchema = new Schema({
@@ -149,6 +157,9 @@ class InMemoryUser {
     this.banReason = data.banReason || '';
     this.lastLoginAt = data.lastLoginAt || new Date();
     this.createdAt = new Date();
+    this.coins = data.coins || 0;
+    this.inventory = data.inventory || [];
+    this.trakStat = data.trakStat || { kills: 0, deaths: 0, wins: 0 };
   }
 
   async save() {

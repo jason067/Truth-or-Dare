@@ -190,10 +190,11 @@ export default function Home() {
   };
 
   const games = [
-    { id: 'truth-or-dare', title: '真心話大冒險', description: '看誰先不敢玩！', icon: '🃏', color: 'from-pink-500 via-purple-500 to-cyan-500', active: true },
-    { id: 'spy', title: '誰是臥底', description: '找出那個與眾不同的人。', icon: '🕵️', color: 'from-gray-700 to-gray-900', active: true },
-    { id: 'turtle-soup', title: '海龜湯', description: '還原離奇的真相。', icon: '🐢', color: 'from-green-700 to-emerald-900', active: true },
-    { id: 'casino', title: '皇家賭場', description: '生死骰子，贏家通吃！', icon: '🎰', color: 'from-yellow-600 to-amber-800', active: true },
+    { id: 'truth-or-dare', title: '真心話大冒險', description: '刺激刺激！', icon: '🍷', color: 'from-pink-500 via-purple-500 to-cyan-500', active: true },
+    { id: 'spy', title: '誰是臥底', description: '找出與眾不同的人。', icon: '🕵️‍♂️', color: 'from-gray-700 to-gray-900', active: true },
+    { id: 'turtle-soup', title: '海龜湯', description: '還原事件真相。', icon: '🐢', color: 'from-green-700 to-emerald-900', active: true },
+    { id: 'casino', title: '娛樂城', description: '生不帶來，死不帶去！', icon: '🎰', color: 'from-yellow-600 to-amber-800', active: true },
+    { id: 'buckshot-roulette', title: '俄羅斯輪盤', description: '心靈與機率的博弈', icon: '🔫', color: 'from-red-900 to-black', active: true },
   ];
 
   // ==========================================

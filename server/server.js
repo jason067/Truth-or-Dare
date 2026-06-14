@@ -86,6 +86,85 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
+// 取得最新使用者資料
+app.get('/api/user/:userId', async (req, res) => {
+  try {
+    const user = await User.findOne({ 
+      $or: [ { _id: req.params.userId }, { googleId: req.params.userId } ]
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ 
+      coins: user.coins, 
+      inventory: user.inventory, 
+      trakStat: user.trakStat 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 開箱 API
+app.post('/api/store/case/open', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const user = await User.findOne({ 
+      $or: [ { _id: userId }, { googleId: userId } ]
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const CASE_COST = 50;
+    if (user.coins < CASE_COST) {
+      return res.status(400).json({ error: '金幣不足' });
+    }
+
+    user.coins -= CASE_COST;
+
+    // 簡單的隨機掉落池
+    const items = [
+      { id: 'skin_gold', name: '黃金霰彈槍', rarity: 'Legendary', chance: 0.05 },
+      { id: 'skin_silver', name: '白銀霰彈槍', rarity: 'Epic', chance: 0.15 },
+      { id: 'skin_wood', name: '經典木紋', rarity: 'Rare', chance: 0.30 },
+      { id: 'spray_tag', name: '街頭噴漆', rarity: 'Common', chance: 0.50 }
+    ];
+
+    const rand = Math.random();
+    let cumulative = 0;
+    let droppedItem = items[items.length - 1];
+    
+    for (const item of items) {
+      cumulative += item.chance;
+      if (rand < cumulative) {
+        droppedItem = item;
+        break;
+      }
+    }
+
+    // 加入背包
+    const existingItem = user.inventory.find(i => i.id === droppedItem.id);
+    if (existingItem) {
+      existingItem.quantity = (existingItem.quantity || 1) + 1;
+      // 強制 Mongoose 更新陣列
+      user.markModified('inventory');
+    } else {
+      user.inventory.push({ id: droppedItem.id, name: droppedItem.name, rarity: droppedItem.rarity, quantity: 1, trakStatKills: 0 });
+    }
+
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      item: droppedItem,
+      coins: user.coins,
+      inventory: user.inventory
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // 訪客登入 API
 app.post('/api/auth/guest', async (req, res) => {
   try {
@@ -1054,6 +1133,268 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('roomUpdated', room);
         io.to(targetSocketId).emit('kickedOut');
       }
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  // ==========================================
+  // 7.5. 俄羅斯輪盤 (Buckshot Roulette) 專屬邏輯
+  // ==========================================
+  socket.on('startBuckshotGame', async ({ roomCode }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.gameType !== 'buckshot') return;
+      const host = room.players.find(p => p.socketId === socket.id);
+      if (!host || !host.isHost) return;
+
+      // 生成子彈陣列 (例如 1~4 發實彈, 1~4 發空包彈)
+      const liveCount = Math.floor(Math.random() * 3) + 1;
+      const blankCount = Math.floor(Math.random() * 3) + 1;
+      let shells = [];
+      for (let i = 0; i < liveCount; i++) shells.push('live');
+      for (let i = 0; i < blankCount; i++) shells.push('blank');
+      // 洗牌
+      shells.sort(() => Math.random() - 0.5);
+
+      const maxHp = 3;
+
+      room.buckshotGameState = {
+        turnIndex: 0,
+        shells, // 槍膛內的子彈
+        shellStats: { live: liveCount, blank: blankCount }, // 給玩家看的提示
+        playerStates: room.players.map(p => {
+          // 隨機分配 2 個道具
+          const items = [];
+          const possibleItems = ['peek', 'shuffle', 'skip', 'heal', 'steal'];
+          for(let i=0; i<2; i++) {
+            items.push(possibleItems[Math.floor(Math.random() * possibleItems.length)]);
+          }
+          return {
+            _id: p._id.toString(),
+            hp: maxHp,
+            maxHp: maxHp,
+            items: items,
+            skipTurns: 0,
+            isAlive: true
+          };
+        })
+      };
+
+      room.players.forEach(p => p.status = 'playing_buckshot');
+      room.status = 'playing';
+      await room.save();
+      
+      io.to(roomCode).emit('roomUpdated', room);
+      io.to(roomCode).emit('buckshotGameStarted', { shellStats: room.buckshotGameState.shellStats });
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('buckshotUseItem', async ({ roomCode, itemIndex, targetId }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.status !== 'playing' || !room.buckshotGameState) return;
+
+      const state = room.buckshotGameState;
+      const currentPlayerId = room.players[state.turnIndex]._id.toString();
+      
+      const playerObj = room.players.find(p => p.socketId === socket.id);
+      if (!playerObj || playerObj._id.toString() !== currentPlayerId) {
+        return socket.emit('error', { message: '還沒輪到你！' });
+      }
+
+      const pState = state.playerStates.find(p => p._id === currentPlayerId);
+      if (!pState || !pState.items[itemIndex]) return socket.emit('error', { message: '無效的道具！' });
+
+      const itemType = pState.items[itemIndex];
+      // 移除道具
+      pState.items.splice(itemIndex, 1);
+
+      let resultMsg = '';
+
+      if (itemType === 'peek') {
+        const nextBullet = state.shells[0];
+        socket.emit('systemBroadcast', { message: `【偷看彈丸】下一發是：${nextBullet === 'live' ? '🔴實彈' : '⚪空包彈'}` });
+        resultMsg = '使用了 偷看彈丸';
+      } 
+      else if (itemType === 'shuffle') {
+        state.shells.sort(() => Math.random() - 0.5);
+        resultMsg = '使用了 重新排列，彈匣已重新洗牌！';
+      } 
+      else if (itemType === 'skip') {
+        const tState = state.playerStates.find(p => p._id === targetId);
+        if (tState && tState._id !== currentPlayerId) {
+          tState.skipTurns += 1;
+          resultMsg = `對 ${room.players.find(p => p._id.toString() === targetId)?.nickname} 使用了 手銬(跳過回合)！`;
+        } else {
+          return socket.emit('error', { message: '必須指定一名對手！' });
+        }
+      } 
+      else if (itemType === 'heal') {
+        if (pState.hp < pState.maxHp) {
+          pState.hp += 1;
+        }
+        resultMsg = '使用了 治療，回復了 1 點生命！';
+      } 
+      else if (itemType === 'steal') {
+        const tState = state.playerStates.find(p => p._id === targetId);
+        if (tState && tState._id !== currentPlayerId && tState.items.length > 0) {
+          const stealIdx = Math.floor(Math.random() * tState.items.length);
+          const stolenItem = tState.items.splice(stealIdx, 1)[0];
+          pState.items.push(stolenItem);
+          resultMsg = `從 ${room.players.find(p => p._id.toString() === targetId)?.nickname} 偷走了一個道具！`;
+        } else {
+          // 若目標沒道具，退回道具
+          pState.items.push('steal');
+          return socket.emit('error', { message: '目標沒有道具可以偷！' });
+        }
+      }
+
+      io.to(roomCode).emit('buckshotItemUsed', {
+        userId: currentPlayerId,
+        itemType,
+        message: resultMsg
+      });
+
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  socket.on('buckshotShoot', async ({ roomCode, targetId }) => {
+    try {
+      const room = await Room.findOne({ roomCode });
+      if (!room || room.status !== 'playing' || !room.buckshotGameState) return;
+
+      const state = room.buckshotGameState;
+      const currentPlayerId = room.players[state.turnIndex]._id.toString();
+      
+      const playerObj = room.players.find(p => p.socketId === socket.id);
+      if (!playerObj || playerObj._id.toString() !== currentPlayerId) {
+        return socket.emit('error', { message: '還沒輪到你！' });
+      }
+
+      if (state.shells.length === 0) return socket.emit('error', { message: '沒有子彈了！' });
+
+      const bullet = state.shells.shift(); // 開槍
+      const isSelf = (targetId === currentPlayerId);
+      
+      let targetState = state.playerStates.find(p => p._id === targetId);
+      if (!targetState) return;
+
+      let damageDealt = false;
+      if (bullet === 'live') {
+        targetState.hp -= 1;
+        if (targetState.hp <= 0) {
+          targetState.isAlive = false;
+          // 更新死亡數
+          const tUser = await User.findOne({ _id: targetId });
+          if (tUser) {
+            tUser.trakStat.deaths += 1;
+            await tUser.save();
+          }
+          // 更新擊殺數 (如果是擊殺別人)
+          if (!isSelf) {
+            const sUser = await User.findOne({ _id: currentPlayerId });
+            if (sUser) {
+              sUser.trakStat.kills += 1;
+              await sUser.save();
+            }
+          }
+        }
+        damageDealt = true;
+      }
+
+      // 推播射擊結果
+      io.to(roomCode).emit('buckshotShootResult', {
+        shooterId: currentPlayerId,
+        targetId,
+        bullet,
+        damageDealt,
+        targetHp: targetState.hp
+      });
+
+      // 判斷回合輪轉
+      // 如果打自己且是空包彈，可以繼續回合。否則換下一位存活玩家
+      if (!(isSelf && bullet === 'blank')) {
+        let nextIndex = (state.turnIndex + 1) % room.players.length;
+        let attempts = 0;
+        
+        while (attempts < room.players.length) {
+          let pState = state.playerStates[nextIndex];
+          if (!pState.isAlive) {
+            nextIndex = (nextIndex + 1) % room.players.length;
+            attempts++;
+            continue;
+          }
+          if (pState.skipTurns > 0) {
+            pState.skipTurns -= 1;
+            io.to(roomCode).emit('systemBroadcast', { message: `玩家 ${room.players[nextIndex].nickname} 的回合被手銬跳過了！` });
+            nextIndex = (nextIndex + 1) % room.players.length;
+            attempts++;
+            continue;
+          }
+          break;
+        }
+        state.turnIndex = nextIndex;
+      }
+
+      // 判斷遊戲是否結束 (只剩一名玩家存活)
+      const alivePlayers = state.playerStates.filter(p => p.isAlive);
+      if (alivePlayers.length <= 1) {
+        room.status = 'waiting';
+        room.players.forEach(p => p.status = 'idle');
+        
+        const winnerId = alivePlayers[0]?._id;
+        io.to(roomCode).emit('buckshotGameOver', { winnerId });
+        
+        // 發放獎勵
+        if (winnerId) {
+          const wUser = await User.findOne({ _id: winnerId });
+          if (wUser) {
+            wUser.coins = (wUser.coins || 0) + 100;
+            wUser.trakStat.wins += 1;
+            await wUser.save();
+            // 通知勝者獲得金幣
+            io.to(roomCode).emit('systemBroadcast', { message: `玩家 ${wUser.name} 贏得了對決，獲得 100 金幣！` });
+          }
+        }
+
+        // 發放參加獎給其他人
+        for (const p of room.players) {
+          if (p._id.toString() !== winnerId) {
+            const lUser = await User.findOne({ _id: p._id.toString() });
+            if (lUser) {
+              lUser.coins = (lUser.coins || 0) + 10;
+              await lUser.save();
+            }
+          }
+        }
+
+        room.buckshotGameState = null;
+      } else if (state.shells.length === 0) {
+        // 如果子彈打完但還沒分出勝負，需要重新裝彈
+        // 目前先直接結束本局，之後可實作 Reload 邏輯
+        io.to(roomCode).emit('buckshotReloading');
+        // 自動裝彈
+        const liveCount = Math.floor(Math.random() * 3) + 1;
+        const blankCount = Math.floor(Math.random() * 3) + 1;
+        let newShells = [];
+        for (let i = 0; i < liveCount; i++) newShells.push('live');
+        for (let i = 0; i < blankCount; i++) newShells.push('blank');
+        newShells.sort(() => Math.random() - 0.5);
+        state.shells = newShells;
+        state.shellStats = { live: liveCount, blank: blankCount };
+        io.to(roomCode).emit('buckshotReloaded', { shellStats: state.shellStats });
+      }
+
+      await room.save();
+      io.to(roomCode).emit('roomUpdated', room);
+
     } catch (err) {
       console.error(err);
     }
