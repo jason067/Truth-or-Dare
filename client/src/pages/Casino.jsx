@@ -49,6 +49,15 @@ export default function Casino() {
       window.location.href = '/';
     });
 
+    socket.on('forceClose', (data) => {
+      alert(`⚠️ ${data.message}`);
+      navigate('/');
+    });
+
+    socket.on('systemBroadcast', (data) => {
+      alert(`📢 系統廣播：\n${data.message}`);
+    });
+
     socket.on('casinoDiceRolled', () => {
       setIsRolling(true);
       let count = 0;

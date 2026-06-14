@@ -109,8 +109,17 @@ export default function TruthOrDare() {
     });
 
     socket.on('kickedOut', () => {
-      alert("你已被房主無情地永久踢出！");
-      window.location.reload();
+      alert('你已被踢出房間！');
+      navigate('/');
+    });
+
+    socket.on('forceClose', (data) => {
+      alert(`⚠️ ${data.message}`);
+      navigate('/');
+    });
+
+    socket.on('systemBroadcast', (data) => {
+      alert(`📢 系統廣播：\n${data.message}`);
     });
 
     return () => {

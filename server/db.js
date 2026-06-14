@@ -149,6 +149,10 @@ const MockRoomAPI = {
     return { deletedCount: 1 };
   },
 
+  async find() {
+    return memoryDb.rooms.map(r => Object.assign(Object.create(InMemoryRoom.prototype), r));
+  },
+
   createId() {
     return memoryDb.createId();
   }

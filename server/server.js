@@ -64,6 +64,86 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
+// 獲取所有活躍房間 API
+app.get('/api/admin/rooms', async (req, res) => {
+  try {
+    let rooms = [];
+    if (typeof Room.find === 'function') {
+      const result = await Room.find();
+      rooms = Array.isArray(result) ? [...result] : result;
+      rooms.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    }
+    res.json(rooms);
+  } catch (error) {
+    console.error("Admin Rooms API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 強制解散房間 API
+app.delete('/api/admin/rooms/:roomCode', async (req, res) => {
+  try {
+    const { roomCode } = req.params;
+    await Room.deleteOne({ roomCode: roomCode.toUpperCase() });
+    // 通知該房間所有人強制退出
+    io.to(roomCode.toUpperCase()).emit('forceClose', { message: '本房間已被管理員強制解散。' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete Room API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 全服廣播 API
+app.post('/api/admin/broadcast', (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message required' });
+    // 向全服廣播
+    io.emit('systemBroadcast', { message });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Broadcast API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 玩家管理操作 API (踢除/加錢)
+app.post('/api/admin/rooms/:roomCode/players/:playerId/action', async (req, res) => {
+  try {
+    const { roomCode, playerId } = req.params;
+    const { action, payload } = req.body;
+    
+    const room = await Room.findOne({ roomCode: roomCode.toUpperCase() });
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    
+    const playerIndex = room.players.findIndex(p => p._id.toString() === playerId);
+    if (playerIndex === -1) return res.status(404).json({ error: 'Player not found' });
+    
+    const player = room.players[playerIndex];
+
+    if (action === 'kick') {
+      const targetSocketId = player.socketId;
+      room.players.splice(playerIndex, 1);
+      await room.save();
+      io.to(room.roomCode).emit('roomUpdated', room);
+      io.to(targetSocketId).emit('kickedOut');
+    } else if (action === 'add_coins') {
+      const amount = payload?.amount || 1000;
+      player.coins += amount;
+      await room.save();
+      io.to(room.roomCode).emit('roomUpdated', room);
+    } else {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+    
+    res.json({ success: true, room });
+  } catch (error) {
+    console.error("Player Action API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {

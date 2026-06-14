@@ -47,6 +47,15 @@ export default function TurtleSoup() {
       window.location.href = '/';
     });
 
+    socket.on('forceClose', (data) => {
+      alert(`⚠️ ${data.message}`);
+      navigate('/');
+    });
+
+    socket.on('systemBroadcast', (data) => {
+      alert(`📢 系統廣播：\n${data.message}`);
+    });
+
     return () => {
       socket.disconnect();
     };
