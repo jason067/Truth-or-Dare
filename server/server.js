@@ -144,6 +144,41 @@ app.post('/api/admin/rooms/:roomCode/players/:playerId/action', async (req, res)
   }
 });
 
+// 獲取大廳狀態與富豪排行榜 API
+app.get('/api/lobby/status', async (req, res) => {
+  try {
+    let rooms = [];
+    if (typeof Room.find === 'function') {
+      const result = await Room.find();
+      rooms = Array.isArray(result) ? [...result] : result;
+    }
+    
+    const activeRoomsCount = rooms.length;
+    let activePlayersCount = 0;
+    let allActivePlayers = [];
+    
+    rooms.forEach(room => {
+      activePlayersCount += room.players.length;
+      room.players.forEach(p => {
+        allActivePlayers.push({ 
+          nickname: p.nickname, 
+          coins: p.coins || 0, 
+          roomCode: room.roomCode 
+        });
+      });
+    });
+    
+    // 依金幣排序，取前 5 名富豪
+    allActivePlayers.sort((a, b) => b.coins - a.coins);
+    const leaderboard = allActivePlayers.slice(0, 5);
+    
+    res.json({ activeRoomsCount, activePlayersCount, leaderboard });
+  } catch (error) {
+    console.error("Lobby Status API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -224,6 +259,17 @@ function generateRoomCode() {
 
 io.on('connection', (socket) => {
   console.log(`用戶連線: ${socket.id}`);
+
+  // ==========================================
+  // 大廳全服聊天室 (Lobby Chat)
+  // ==========================================
+  socket.on('sendLobbyMessage', (data) => {
+    io.emit('lobbyMessage', {
+      user: data.user,
+      message: data.message,
+      time: new Date().toISOString()
+    });
+  });
 
   // ==========================================
   // 1. 創建房間 (createRoom)
