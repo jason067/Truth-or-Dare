@@ -6,7 +6,7 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const { Room, Round, User, createRoomInstance, createRoundInstance, createUserInstance, createId } = require('./db');
+const { Room, Round, User, Chat, createRoomInstance, createRoundInstance, createUserInstance, createChatInstance, createId, getIsInMemory } = require('./db');
 
 const app = express();
 app.use(cors());
@@ -179,6 +179,21 @@ app.get('/api/lobby/status', async (req, res) => {
   }
 });
 
+// 獲取大廳聊天歷史紀錄 API
+app.get('/api/lobby/chat', async (req, res) => {
+  try {
+    let chats = [];
+    if (typeof Chat.find === 'function') {
+      chats = await Chat.find().sort({ time: -1 }).limit(50);
+      chats = chats.reverse(); // 讓舊的在前面，新的在後面
+    }
+    res.json(chats);
+  } catch (error) {
+    console.error("Lobby Chat API Error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -263,12 +278,23 @@ io.on('connection', (socket) => {
   // ==========================================
   // 大廳全服聊天室 (Lobby Chat)
   // ==========================================
-  socket.on('sendLobbyMessage', (data) => {
-    io.emit('lobbyMessage', {
+  socket.on('sendLobbyMessage', async (data) => {
+    const chatMsg = {
       user: data.user,
       message: data.message,
-      time: new Date().toISOString()
-    });
+      time: new Date()
+    };
+    
+    // 儲存到資料庫
+    try {
+      const newChat = createChatInstance(chatMsg);
+      await newChat.save();
+    } catch(e) {
+      console.error("儲存聊天訊息失敗:", e);
+    }
+
+    // 廣播給所有人
+    io.emit('lobbyMessage', chatMsg);
   });
 
   // ==========================================

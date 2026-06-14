@@ -11,6 +11,12 @@ const UserSchema = new Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const ChatSchema = new Schema({
+  user: { type: String, required: true },
+  message: { type: String, required: true },
+  time: { type: Date, default: Date.now }
+});
+
 
 const PlayerSchema = new Schema({
   socketId: { type: String, required: true },
@@ -51,6 +57,7 @@ const memoryDb = {
   rooms: [],
   rounds: [],
   users: [],
+  chats: [],
   
   createId() {
     return new mongoose.Types.ObjectId().toString();
@@ -124,6 +131,21 @@ class InMemoryUser {
   }
 }
 
+class InMemoryChat {
+  constructor(data) {
+    this._id = memoryDb.createId();
+    this.user = data.user;
+    this.message = data.message;
+    this.time = data.time || new Date();
+  }
+
+  async save() {
+    memoryDb.chats.push(this);
+    if (memoryDb.chats.length > 200) memoryDb.chats.shift();
+    return this;
+  }
+}
+
 // 靜態方法模擬 Mongoose API
 const MockRoomAPI = {
   async findOne(query) {
@@ -188,10 +210,27 @@ const MockUserAPI = {
   }
 };
 
+const MockChatAPI = {
+  find() {
+    // Return a fake Mongoose Query object that supports sort and limit
+    return {
+      sort: function() {
+        const sorted = [...memoryDb.chats].sort((a, b) => new Date(b.time) - new Date(a.time));
+        return {
+          limit: function(n) {
+            return Promise.resolve(sorted.slice(0, n));
+          }
+        }
+      }
+    };
+  }
+};
+
 // 預設直接開啟 In-Memory Mock，防止異步連線過程中 Room 為 undefined
 let RoomModel = MockRoomAPI;
 let RoundModel = MockRoundAPI;
 let UserModel = MockUserAPI;
+let ChatModel = MockChatAPI;
 let isInMemory = true;
 
 // 3. 連線資料庫並決定使用何種模型
@@ -205,6 +244,7 @@ mongoose.connect(mongoUri, {
   RoomModel = mongoose.model('Room', RoomSchema);
   RoundModel = mongoose.model('Round', RoundSchema);
   UserModel = mongoose.model('User', UserSchema);
+  ChatModel = mongoose.model('Chat', ChatSchema);
   isInMemory = false;
 })
 .catch((err) => {
@@ -240,14 +280,25 @@ function createUserInstance(data) {
   }
 }
 
+function createChatInstance(data) {
+  if (isInMemory) {
+    return new InMemoryChat(data);
+  } else {
+    const MongooseChat = mongoose.model('Chat');
+    return new MongooseChat(data);
+  }
+}
+
 // 導出模組
 module.exports = {
   get Room() { return RoomModel; },
   get Round() { return RoundModel; },
   get User() { return UserModel; },
+  get Chat() { return ChatModel; },
   createRoomInstance,
   createRoundInstance,
   createUserInstance,
+  createChatInstance,
   getIsInMemory: () => isInMemory,
   createId: () => isInMemory ? MockRoomAPI.createId() : new mongoose.Types.ObjectId().toString()
 };

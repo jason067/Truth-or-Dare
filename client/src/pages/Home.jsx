@@ -42,6 +42,20 @@ export default function Home() {
       alert(`📢 系統廣播：\n${data.message}`);
     });
 
+    // 載入歷史聊天紀錄
+    const fetchChatHistory = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/lobby/chat`);
+        if (res.ok) {
+          const history = await res.json();
+          setChatMessages(history);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchChatHistory();
+
     const fetchStatus = async () => {
       try {
         const res = await fetch(`${BACKEND_URL}/api/lobby/status`);
