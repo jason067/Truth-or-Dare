@@ -323,6 +323,13 @@ app.post('/api/lobby/invite', async (req, res) => {
   }
 });
 
+const checkBan = async (userId) => {
+  if (!userId) return false;
+  const users = await db.User.find();
+  const dbUser = users.find(u => u.googleId === userId || u._id.toString() === userId);
+  return dbUser && dbUser.isBanned;
+};
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -442,8 +449,12 @@ io.on('connection', (socket) => {
   // ==========================================
   // 1. 創建房間 (createRoom)
   // ==========================================
-  socket.on('createRoom', async ({ nickname, gameType }) => {
+  socket.on('createRoom', async ({ nickname, gameType, userId }) => {
     try {
+      if (await checkBan(userId)) {
+        return socket.emit('error', { message: '您已被封鎖，無法開房。' });
+      }
+
       let roomCode = generateRoomCode();
       // 確保 roomCode 唯一
       let existing = await Room.findOne({ roomCode });
@@ -486,8 +497,12 @@ io.on('connection', (socket) => {
   // ==========================================
   // 2. 加入房間 (joinRoom)
   // ==========================================
-  socket.on('joinRoom', async ({ roomCode, nickname }) => {
+  socket.on('joinRoom', async ({ roomCode, nickname, userId }) => {
     try {
+      if (await checkBan(userId)) {
+        return socket.emit('error', { message: '您已被封鎖，無法加入房間。' });
+      }
+
       const code = roomCode.toUpperCase();
       let room = await Room.findOne({ roomCode: code });
       if (!room) {
