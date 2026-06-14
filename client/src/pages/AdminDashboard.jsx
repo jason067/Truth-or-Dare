@@ -287,6 +287,7 @@ export default function AdminDashboard() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">會員登入紀錄</h3>
+              <button onClick={fetchUsers} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-bold transition-colors ml-4 mr-auto">🔄 重新整理</button>
               <form onSubmit={handleAddUser} className="flex gap-2">
                 <input 
                   type="text" 
