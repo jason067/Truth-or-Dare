@@ -231,6 +231,31 @@ app.post('/api/admin/users/:userId/action', async (req, res) => {
   }
 });
 
+// 管理員發送個人信件 API
+app.post('/api/admin/users/:userId/mail', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { title, content, rewardCoins } = req.body;
+    
+    const mail = db.createMailInstance({
+      userId,
+      title: title || '系統通知',
+      content: content || '',
+      type: 'system',
+      rewardCoins: parseInt(rewardCoins) || 0
+    });
+    
+    await mail.save();
+    
+    // 通知該名玩家有新信件
+    io.emit('newMail', userId);
+    
+    res.json({ success: true, mail });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ====================== 信件與申訴 API ======================
 app.get('/api/mail/:userId', async (req, res) => {
   try {

@@ -21,6 +21,13 @@ export default function AdminDashboard() {
   const [banTarget, setBanTarget] = useState(null);
   const [banDays, setBanDays] = useState('1');
   const [banReason, setBanReason] = useState('違反社群規範');
+  
+  const [mailModalOpen, setMailModalOpen] = useState(false);
+  const [mailTarget, setMailTarget] = useState(null);
+  const [mailTitle, setMailTitle] = useState('系統獎勵');
+  const [mailContent, setMailContent] = useState('感謝您對伺服器的貢獻，特發放獎勵。');
+  const [mailReward, setMailReward] = useState('0');
+  
   const navigate = useNavigate();
 
   const fetchUsers = async () => {
@@ -184,6 +191,21 @@ export default function AdminDashboard() {
       fetchUsers();
     } catch (err) {
       alert('封鎖失敗！');
+    }
+  };
+
+  const submitMail = async () => {
+    if (!mailTarget) return;
+    try {
+      await fetch(`${BACKEND_URL}/api/admin/users/${mailTarget}/mail`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: mailTitle, content: mailContent, rewardCoins: mailReward })
+      });
+      setMailModalOpen(false);
+      alert('寄信成功！');
+    } catch (err) {
+      alert('寄信失敗！');
     }
   };
 
@@ -415,6 +437,15 @@ export default function AdminDashboard() {
                             <button onClick={() => handleUserAction(u._id, 'ban')} className="px-2 py-1 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-red-400 rounded border border-white/10">封鎖</button>
                           )}
                         </div>
+                        <button 
+                          onClick={() => {
+                            setMailTarget(u.googleId || u._id);
+                            setMailModalOpen(true);
+                          }} 
+                          className="mt-1 w-full px-2 py-1 bg-blue-500/10 hover:bg-blue-500/30 text-blue-400 rounded border border-blue-500/30 text-xs transition-colors"
+                        >
+                          寄信/獎勵
+                        </button>
                       </td>
                       <td className="p-4 text-right">
                         <button onClick={() => handleDeleteUser(u._id)} className="px-3 py-1 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg border border-red-600/30 text-sm font-bold transition-colors">刪除</button>
@@ -637,6 +668,60 @@ export default function AdminDashboard() {
                   className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-500/20"
                 >
                   執行封鎖
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 寄信/發獎勵 Modal */}
+      {mailModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111] border border-blue-500/30 p-6 rounded-3xl w-full max-w-md shadow-2xl">
+            <h3 className="text-2xl font-black text-blue-400 mb-4 flex items-center gap-2">
+              <span className="text-3xl">✉️</span> 發送信件 / 獎勵
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-2">信件標題</label>
+                <input 
+                  type="text"
+                  value={mailTitle}
+                  onChange={(e) => setMailTitle(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-2">信件內容</label>
+                <textarea 
+                  value={mailContent}
+                  onChange={(e) => setMailContent(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50 h-24"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-2">給予金幣 (可輸入 0)</label>
+                <input 
+                  type="number"
+                  value={mailReward}
+                  onChange={(e) => setMailReward(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-yellow-500/50"
+                  min="0"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button 
+                  onClick={() => setMailModalOpen(false)}
+                  className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-colors"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={submitMail}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-blue-500/20"
+                >
+                  發送
                 </button>
               </div>
             </div>

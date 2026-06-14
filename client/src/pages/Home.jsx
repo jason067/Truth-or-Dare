@@ -58,12 +58,16 @@ export default function Home() {
 
   useEffect(() => {
     if (!isUnlocked) return;
-
+    
     const newSocket = io(BACKEND_URL);
     setSocket(newSocket);
 
+    newSocket.on('connect', () => {
+      newSocket.emit('joinLobby');
+    });
+
     newSocket.on('lobbyMessage', (msg) => {
-      setChatMessages(prev => [...prev, msg].slice(-50)); // 保留最後 50 則
+      setChatMessages(prev => [...prev, msg].slice(-50));
     });
 
     newSocket.on('systemBroadcast', (data) => {
@@ -71,10 +75,9 @@ export default function Home() {
     });
 
     newSocket.on('error', (data) => {
-      alert(`⚠️ 錯誤：\n${data.message}`);
-      if (data.message.includes('封鎖')) {
-         logoutUser();
-         setIsUnlocked(false);
+      alert(`連線錯誤:\n${data.message}`);
+      if (data.message.includes('停權')) {
+        loginUser({ ...user, isBanned: true });
       }
     });
     
@@ -96,6 +99,13 @@ export default function Home() {
       if (user && (user.id === unbannedUserId || user.googleId === unbannedUserId)) {
         alert('您的帳號已解除停權，功能已恢復！');
         loginUser({ ...user, isBanned: false, banUntil: null, banReason: '' });
+      }
+    });
+
+    // 有新信件
+    newSocket.on('newMail', (targetUserId) => {
+      if (user && (user.id === targetUserId || user.googleId === targetUserId)) {
+        fetchMails();
       }
     });
 
@@ -129,7 +139,7 @@ export default function Home() {
       newSocket.disconnect();
       clearInterval(interval);
     };
-  }, [isUnlocked]);
+  }, [isUnlocked, user]);
 
   const handleLoginSuccess = async (credentialResponse) => {
     try {
