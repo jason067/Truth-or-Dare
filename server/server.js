@@ -131,7 +131,10 @@ app.post('/api/admin/users/:userId/action', async (req, res) => {
 
     if (action === 'mute') user.isMuted = true;
     if (action === 'unmute') user.isMuted = false;
-    if (action === 'ban') user.isBanned = true;
+    if (action === 'ban') {
+      user.isBanned = true;
+      io.emit('userBanned', user.googleId); // 主動踢出
+    }
     if (action === 'unban') user.isBanned = false;
 
     await user.save();

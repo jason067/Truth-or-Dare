@@ -50,7 +50,7 @@ export default function AdminDashboard() {
   const fetchChats = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/chat`);
+      const response = await fetch(`${BACKEND_URL}/api/lobby/chat`);
       if (!response.ok) throw new Error(`Server responded with ${response.status}`);
       const data = await response.json();
       setChats(Array.isArray(data) ? data : []);

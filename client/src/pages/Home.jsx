@@ -56,6 +56,15 @@ export default function Home() {
       setChatMessages(prev => prev.filter(c => c._id !== chatId));
     });
 
+    // 如果使用者被封鎖
+    newSocket.on('userBanned', (bannedUserId) => {
+      if (user && (user.id === bannedUserId || user.googleId === bannedUserId)) {
+        alert('您已被管理員封鎖，將被強制登出。');
+        logoutUser();
+        setIsUnlocked(false);
+      }
+    });
+
     // 載入歷史聊天紀錄
     const fetchChatHistory = async () => {
       try {
